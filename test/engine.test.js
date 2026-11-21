@@ -633,6 +633,10 @@ console.log('Bot pace + UI render rules (UI script block):');
     // peeking explains instead of silently doing nothing.
     check('no seat claims the turn during the peek phase', /view\.turnPlayerId===myId&&!inPeek/.test(uiSrc) && /view\.phase!=='peek'/.test(uiSrc));
     check('draw-pile click while peeking toasts an explanation', /Still peeking — press Done/.test(uiSrc));
+    // Done button nudges after peeking: blinks + scrolls into view once
+    // per peek (only once the reveal modal is closed), never every render.
+    check('Done button blinks after peeking (doneblink keyframes + attention class)', /@keyframes doneblink/.test(html) && /#btnPeekDone\.attention/.test(html) && /classList\.add\('attention'\)/.test(uiSrc));
+    check('Done button scrolls into view once per peek, modal-closed only', /lastPeekNudge/.test(uiSrc) && /scrollIntoView\(\{behavior:'smooth', block:'center'\}\)/.test(uiSrc) && /revealModal.*classList\.contains\('hidden'\)/.test(uiSrc));
   }
 }
 
