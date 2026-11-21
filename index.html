@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Wellington Online v1.2.3 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
+<!-- Wellington Online v1.3 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -178,7 +178,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   <div class="card rules" style="margin-top:14px">
     <h2>How Wellington works</h2>
     <ul>
-      <li><b>Goal: lowest score wins.</b> Numbered cards are worth <b>10</b>, Jack &amp; Queen <b>11</b>, Joker <b>0</b>, King <b>−1</b>, Ace <b>−2</b>. (Points are editable — see Rules.)</li>
+      <li><b>Goal: lowest score wins.</b> Numbered cards are worth <b>their face value</b> (2 is 2, 10 is 10), Jack &amp; Queen <b>11</b>, Joker <b>−2</b>, King <b>−1</b>, Ace <b>0</b>. (Points are editable — see Rules.)</li>
       <li><b>Start:</b> everyone gets 4 cards face-down. Peek at any <b>2 of your own</b> once, then put them back.</li>
       <li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down. A small gold dot marks cards you have seen.</li>
       <li><b>Your turn:</b> draw the top card and look at it. Either <b>swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b> face-up. Exactly one discard per turn.</li>
@@ -247,7 +247,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   </div>
 </div>
 
-<footer>Wellington Online v1.2.3 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
+<footer>Wellington Online v1.3 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
 Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, nothing to sign up for. The host holds the true game state; each player only ever sees their own cards.</footer>
 </div>
 
@@ -310,18 +310,21 @@ Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, n
    WELLINGTON ONLINE — engine (pure JS, no DOM).
    Tested in Node: `node test/engine.test.js` extracts this script block.
    ===================================================================== */
-/* ---- Points: EDIT THESE — owner unsure ----
-   Every numbered card 2-10 = 10, J/Q = 11, Joker = 0, K = -1, A = -2.
-   Change a number here and the Rules table, scoring and bots follow. */
+/* ---- Points: EDIT THESE ----
+   Numbered cards are worth their face value (2 is 2, 10 is 10),
+   J/Q = 11, Joker = -2, K = -1, A = 0. Lowest total wins.
+   Change a number here and the scoring, the Rules table and the
+   bots follow (the Rules table reads this const). */
 const CARD_POINTS = {
-  '2': 10, '3': 10, '4': 10, '5': 10, '6': 10, '7': 10, '8': 10, '9': 10, '10': 10,
-  'J': 11, 'Q': 11, 'K': -1, 'A': -2, 'Joker': 0
+  '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10,
+  'J': 11, 'Q': 11, 'K': -1, 'A': 0, 'Joker': -2
 };
 const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
 const SUITS = ['\u2660','\u2665','\u2666','\u2663'];
 const EFFECT_RANKS = ['5','6','7','8'];
-/* Unknown own/opponent card estimate used by bots (~ deck average). */
-const EST_UNKNOWN = 8;
+/* Unknown own/opponent card estimate used by bots (~5.5, the deck
+   average: numbered at face value, J/Q 11, K -1, A 0, Joker -2). */
+const EST_UNKNOWN = 5.5;
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 function randomSeed(){ if (typeof crypto!=='undefined' && crypto.getRandomValues){ const a=new Uint32Array(1); crypto.getRandomValues(a); return a[0]>>>0; } return (Math.random()*4294967296)>>>0; }
 function shuffle(arr,rng){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); const t=arr[i]; arr[i]=arr[j]; arr[j]=t; } return arr; }
@@ -830,7 +833,7 @@ function estimateTotal(st, playerId){
 /* ---- bots ----
    A bot only ever uses what it has SEEN (its `known` map): peeked own
    cards, its drawn card, 5/6/8 peeks, and cards shown by a wrong snap.
-   Unknown own/opponent slots are estimated at EST_UNKNOWN (~8, the deck
+   Unknown own/opponent slots are estimated at EST_UNKNOWN (~5.5, the deck
    average). It never reads an unseen card's value from the full state.
    Snaps: only when it KNOWS it holds the matching rank, ~40% of chances
    so humans can snap first; after a snap it may snap again in the same
@@ -1104,9 +1107,9 @@ function miniCardHtml(c, faceCard){
 }
 function viewHashOf(v){ let h=5381; const s=JSON.stringify([v.phase,v.turnIdx,v.turnCount,v.deckCount,v.discard.map(c=>c.id),v.players.map(p=>p.cards.map(c=>c.id)),v.wellington.calledBy]); for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h; }
 function pointsTableHtml(){
-  const rows=[['2 – 10','10 each'],['Jack, Queen','11'],['Joker','0'],['King','−1'],['Ace','−2']];
+  const rows=[['2 – 10','its face value (2 is 2, 10 is 10)'],['Jack, Queen',CARD_POINTS['J']],['Joker',CARD_POINTS['Joker']],['King',CARD_POINTS['K']],['Ace',CARD_POINTS['A']]];
   return '<table class="points"><tr><th>Card</th><th>Points</th></tr>'+rows.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('')+'</table>'+
-  '<p style="margin-top:8px">Lowest total when the game ends wins. Ties share the win. Points come from the same list the game scores with — if the owner ever changes a value, this table changes with it.</p>';
+  '<p style="margin-top:8px">Lowest total when the game ends wins. Ties share the win. Points come from the same list the game scores with — change a value in CARD_POINTS and this table changes with it.</p>';
 }
 function rulesHtml(){
   return '<p><b>Goal:</b> finish with the <b>lowest</b> total. '+pointsTableHtml()+'</p>'+

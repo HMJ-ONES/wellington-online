@@ -80,13 +80,13 @@ console.log('Deck & deal:');
 
 console.log('Points table (CARD_POINTS — editable const):');
 {
-  check('numbered 2-10 are 10', ['2','3','4','5','6','7','8','9','10'].every(r => E.cardPoints(card(r, '♠')) === 10));
+  check('numbered 2-10 are worth their face value', ['2','3','4','5','6','7','8','9','10'].every(r => E.cardPoints(card(r, '♠')) === Number(r)));
   check('J and Q are 11', E.cardPoints(card('J', '♠')) === 11 && E.cardPoints(card('Q', '♠')) === 11);
-  check('Joker is 0', E.cardPoints(card('Joker', '♥')) === 0);
+  check('Joker is -2', E.cardPoints(card('Joker', '♥')) === -2);
   check('K is -1', E.cardPoints(card('K', '♠')) === -1);
-  check('A is -2', E.cardPoints(card('A', '♠')) === -2);
-  check('CARD_POINTS is exported and editable', E.CARD_POINTS['K'] === -1 && E.CARD_POINTS['A'] === -2);
-  check('scoreOf sums a hand', E.scoreOf([card('A','♠'), card('K','♥'), card('5','♦'), card('Joker','♥')]) === -2 + -1 + 10 + 0);
+  check('A is 0', E.cardPoints(card('A', '♠')) === 0);
+  check('CARD_POINTS is exported and editable', E.CARD_POINTS['K'] === -1 && E.CARD_POINTS['A'] === 0);
+  check('scoreOf sums a hand', E.scoreOf([card('A','♠'), card('K','♥'), card('5','♦'), card('Joker','♥')]) === 0 + -1 + 5 + -2);
 }
 
 console.log('Peek phase:');
@@ -518,8 +518,8 @@ console.log('0-card instant end & lowest-wins incl. ties:');
   check('0-card player scores 0 and wins', st.winners.join(',') === 'p1' && st.scores.find(s => s.playerId === 'p1').total === 0);
   // Lowest wins; tie shares.
   const st2 = riggedGame([
-    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],   // -2-1+10+10 = 17
-    [['A','♠'],['K','♥'],['2','♦'],['3','♣']],   // -2-1+10+10 = 17
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],   // 0-1+9+9 = 17
+    [['A','♠'],['K','♥'],['8','♦'],['10','♣']],  // 0-1+8+10 = 17
     [['10','♠'],['10','♥'],['10','♦'],['10','♣']], // 40
   ], { turnIdx: 0 });
   E.applyAction(st2, 'p0', { type: 'wellington' });
@@ -639,6 +639,7 @@ console.log('Bot pace + UI render rules (UI script block):');
     check('Done button scrolls into view once per peek, modal-closed only', /lastPeekNudge/.test(uiSrc) && /scrollIntoView\(\{behavior:'smooth', block:'center'\}\)/.test(uiSrc) && /revealModal.*classList\.contains\('hidden'\)/.test(uiSrc));
     // ✕ buttons: Rules modal (top-left) and the SNAP tip banner (top)
     check('Rules modal has a top-left ✕ that closes it', /id="rulesCloseX"/.test(html) && /class="modal-x"/.test(html) && /\$\('rulesCloseX'\)\.onclick=\(\)=>show\('rulesModal',false\)/.test(uiSrc));
+    check('Rules points table reads CARD_POINTS (cannot go stale)', /function pointsTableHtml/.test(uiSrc) && /CARD_POINTS\['J'\]/.test(uiSrc) && /CARD_POINTS\['Joker'\]/.test(uiSrc) && /CARD_POINTS\['K'\]/.test(uiSrc) && /CARD_POINTS\['A'\]/.test(uiSrc));
     check('Snap banner has an ✕ that dismisses tips for this game only', /id="snapBannerX"/.test(html) && /snapTipsDismissed=true/.test(uiSrc) && /snapTipsDismissed=false/.test(uiSrc) && /!snapTipsDismissed/.test(uiSrc));
   }
 }

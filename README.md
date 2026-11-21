@@ -14,13 +14,13 @@ Each player gets **4 cards face-down** in a row. Peek at 2 of your own, then tak
 
 | Card | Points |
 |---|---|
-| 2 – 10 | 10 each |
+| 2 – 10 | face value (2 is 2, 10 is 10) |
 | Jack, Queen | 11 |
-| Joker | 0 |
+| Joker | −2 |
 | King | −1 |
-| Ace | −2 |
+| Ace | 0 |
 
-**The owner isn't sure about these values** — so they live in one easily-editable const at the top of the engine in `index.html` (`CARD_POINTS`, marked `EDIT THESE`). Change a number there and the scoring, the in-game Rules table, and the bots all follow. Lowest total wins; ties share the win.
+The values live in one easily-editable const at the top of the engine in `index.html` (`CARD_POINTS`, marked `EDIT THESE`). Change a number there and the scoring, the in-game Rules table, and the bots all follow. Lowest total wins; ties share the win.
 
 ### How a turn works
 
@@ -60,7 +60,7 @@ These are the calls made while building; they are also stated in the in-game Rul
 6. **Wrong snap while an effect is pending:** snaps stay allowed; the pending effect still has to resolve before the turn passes.
 7. **Snap window:** the window is "open" whenever there is a top discard card, and it closes only in the sense that the *next* discard replaces the rank to match. A wrong snap does not close it.
 8. **Ties:** tied lowest totals share the win.
-9. **Bots and memory:** bots only act on cards they have *seen* (their peeks, drawn cards, 5/6/8 peeks, cards shown by a wrong snap). Unknown slots are estimated at ~8 (the deck average).
+9. **Bots and memory:** bots only act on cards they have *seen* (their peeks, drawn cards, 5/6/8 peeks, cards shown by a wrong snap). Unknown slots are estimated at ~5.5 (the deck average).
 10. **Face-down rule:** a table card is face-up only while it is actively being viewed (transient reveal, auto flip-back after ~4s) or at the final reveal. Memory of seen cards is kept for play, but the display never shows a value just because a card is known. A gold dot marks cards the viewer has seen.
 11. **Card 8 — look, then choose:** the 8 reveals both cards (transiently) and then shows a pop-up with both cards and the choice **Swap them** / **Keep as they are**. The pair is enforced at both layers: the engine rejects any 8 pair that is not one own + one opponent card (including locked/penalty and Wellington-caller targets), and the UI never offers own cards as the opponent pick. The same own+opponent rule applies to the blind 7.
 
@@ -90,7 +90,7 @@ The host sets the max (2–6) when creating the lobby. Bots count toward it: the
 
 ## Bots
 
-Bots peek 2 cards at the start, remember everything they have seen, estimate unknown slots at ~8, and:
+Bots peek 2 cards at the start, remember everything they have seen, estimate unknown slots at ~5.5, and:
 
 - swap a drawn card in for their highest-value slot when the drawn card is lower, else discard it;
 - use 5 to peek an unknown own card, 6 to peek an unknown opponent card, 7 to blind-swap their highest card with a random opponent card, 8 to swap only when the opponent's card is known-lower;

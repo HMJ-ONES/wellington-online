@@ -88,8 +88,8 @@ function scheck(name, cond, extra) {
   else { sFail++; console.log('FAIL  ' + name + (extra ? ' — ' + extra : '')); }
 }
 {
-  // Bot knows its own cards: A(-2), K(-1), 9(10), 10(10). Draws a Joker (0).
-  // Joker 0 < highest known 10 -> bot should swap it in for a 10.
+  // Bot knows its own cards: A(0), K(-1), 9(9), 10(10). Draws a Joker (-2).
+  // Joker -2 < highest known 10 -> bot should swap it in for a 10.
   const st = E.newGame([{ name: 'B0', isBot: true }, { name: 'B1', isBot: true }], 21);
   for (const p of st.players) {
     E.applyAction(st, p.id, { type: 'peek', slot: 0 });
@@ -164,7 +164,7 @@ function scheck(name, cond, extra) {
   const d = E.botChooseAction(st4, 'p1', () => 0);
   scheck('bot snaps when it KNOWS it holds the matching rank', d && d.type === 'snap' && d.slot === 0, 'got ' + JSON.stringify(d));
   // Bot 8: looks at both, then CONFIRMS only when the opponent card is lower.
-  // Bot holds 9(10) as its highest known card; opponent holds A(-2), known.
+  // Bot holds 10 as its highest known card; opponent holds A(0), known.
   const st5 = E.newGame([{ name: 'B0', isBot: true }, { name: 'B1', isBot: true }], 25);
   for (const p of st5.players) {
     E.applyAction(st5, p.id, { type: 'peek', slot: 0 });
@@ -197,7 +197,7 @@ function scheck(name, cond, extra) {
   E.applyAction(st5, 'p0', b);
   scheck('bot 8 confirm swapped the Ace in', st5.players[0].cards.some(c => c.id === 'A♦') && st5.phase === 'play');
   // Bot 8 DECLINES when the opponent card is higher: bot's best own card
-  // is a Joker (0); every opponent card it knows is 9+ (10), so it keeps.
+  // is an Ace (0); every opponent card it knows is 9+ (9–11), so it keeps.
   const st6 = E.newGame([{ name: 'B0', isBot: true }, { name: 'B1', isBot: true }], 26);
   for (const p of st6.players) {
     E.applyAction(st6, p.id, { type: 'peek', slot: 0 });
@@ -219,7 +219,7 @@ function scheck(name, cond, extra) {
   E.applyAction(st6, 'p0', { type: 'draw' });
   E.applyAction(st6, 'p0', { type: 'discardDrawn' }); // 8 -> swapSeen effect
   b = E.botChooseAction(st6, 'p0');
-  scheck('bot 8 (decline case) picks its highest own card (Joker, 0)', b && b.type === 'effectSwapOwn' && b.slot === 3, 'got ' + JSON.stringify(b));
+  scheck('bot 8 (decline case) picks a highest own card (Ace, 0)', b && b.type === 'effectSwapOwn' && (b.slot === 0 || b.slot === 1), 'got ' + JSON.stringify(b));
   E.applyAction(st6, 'p0', b);
   b = E.botChooseAction(st6, 'p0', () => 0.99); // deterministic: random pick path
   scheck('bot 8 picks some opponent card to look at', b && b.type === 'effectSwapOther' && b.targetPlayerId === 'p1', 'got ' + JSON.stringify(b));
