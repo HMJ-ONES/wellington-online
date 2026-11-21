@@ -739,5 +739,82 @@ console.log('Snap tips room setting (advanced, distraction-free):');
   check('rematch keeps the game\'s snap-tips setting', /snapTips: fullState\?fullState\.snapTips!==false:true/.test(html));
 }
 
+console.log('removePlayer (disconnect withdrawal) + spectator views:');
+{
+  // Cards go back into the deck (shuffled in): deck grows by the leaver's cards.
+  let st = riggedGame([[['5','♥'],['9','♣'],['2','♦'],['K','♠']],[['3','♥'],['8','♣'],['7','♦'],['Q','♠']],[['4','♥'],['6','♣'],['10','♦'],['A','♠']]], {deck: [['2','♣'],['3','♦']]});
+  const deckBefore = st.deck.length;
+  const r = E.removePlayer(st, 'p1');
+  check('removePlayer ok', r.ok === true);
+  check('leaver is gone from players', st.players.length === 2 && !st.players.some(p => p.id === 'p1'));
+  check("leaver's 4 cards returned to the deck", st.deck.length === deckBefore + 4);
+  check('game continues (2 players left)', st.phase !== 'over');
+
+  // Turn passes when the leaver was the turn player.
+  st = riggedGame([[['5','♥'],['9','♣'],['2','♦'],['K','♠']],[['3','♥'],['8','♣'],['7','♦'],['Q','♠']],[['4','♥'],['6','♣'],['10','♦'],['A','♠']]], {turnIdx: 1});
+  E.removePlayer(st, 'p1');
+  check('turn passes to the next player after the leaver', st.turnIdx === 1 && st.players[st.turnIdx].id === 'p2' && st.phase === 'play');
+  // Turn stays when a non-turn player leaves.
+  st = riggedGame([[['5','♥'],['9','♣'],['2','♦'],['K','♠']],[['3','♥'],['8','♣'],['7','♦'],['Q','♠']],[['4','♥'],['6','♣'],['10','♦'],['A','♠']]], {turnIdx: 0});
+  E.removePlayer(st, 'p2');
+  check('turn stays with the current player when a bystander leaves', st.turnIdx === 0 && st.players[0].id === 'p0');
+
+  // Last player remaining wins.
+  st = riggedGame([[['5','♥'],['9','♣'],['2','♦'],['K','♠']],[['3','♥'],['8','♣'],['7','♦'],['Q','♠']]]);
+  E.removePlayer(st, 'p1');
+  check('game ends when only one player remains', st.phase === 'over' && st.winners.length === 1 && st.winners[0] === 'p0');
+
+  // Drawn card returns to the deck when the leaver was mid-draw.
+  st = riggedGame([[['5','♥'],['9','♣'],['2','♦'],['K','♠']],[['3','♥'],['8','♣'],['7','♦'],['Q','♠']]], {deck: [['2','♣']]});
+  E.applyAction(st, 'p0', {type: 'draw'});
+  const deckBefore2 = st.deck.length;
+  E.removePlayer(st, 'p0');
+  check('drawn card returns to the deck on withdrawal', st.deck.length === deckBefore2 + 5 && st.drawnCard === null);
+
+  // Wellington: caller leaving cancels the final round; a leaver in the
+  // queue is struck from it.
+  st = riggedGame([[['5','♥'],['9','♣'],['2','♦'],['K','♠']],[['3','♥'],['8','♣'],['7','♦'],['Q','♠']],[['4','♥'],['6','♣'],['10','♦'],['A','♠']]], {turnIdx: 0});
+  E.applyAction(st, 'p0', {type: 'wellington'});
+  check('wellington active in fixture', st.wellington.active === true && st.wellington.remaining.length === 2);
+  E.removePlayer(st, 'p1');
+  check('leaver struck from the Wellington queue', st.wellington.remaining.length === 1 && st.wellington.remaining[0] === 'p2');
+  st = riggedGame([[['5','♥'],['9','♣'],['2','♦'],['K','♠']],[['3','♥'],['8','♣'],['7','♦'],['Q','♠']],[['4','♥'],['6','♣'],['10','♦'],['A','♠']]], {turnIdx: 0});
+  E.applyAction(st, 'p0', {type: 'wellington'});
+  E.removePlayer(st, 'p0');
+  check('caller leaving cancels Wellington', st.wellington.active === false && st.phase !== 'final');
+
+  // Peek phase: removing the last unpeeked player starts play.
+  st = E.newGame(['A', 'B', 'C'], 3);
+  E.applyAction(st, 'p0', {type: 'peek', slot: 0});
+  E.applyAction(st, 'p0', {type: 'peek', slot: 1});
+  E.applyAction(st, 'p0', {type: 'peekDone'});
+  E.applyAction(st, 'p1', {type: 'peek', slot: 0});
+  E.applyAction(st, 'p1', {type: 'peek', slot: 1});
+  E.applyAction(st, 'p1', {type: 'peekDone'});
+  check('peek fixture still in peek phase', st.phase === 'peek');
+  E.removePlayer(st, 'p2');
+  check('play starts when the last unpeeked player leaves', st.phase === 'play');
+
+  // Spectator view: an unknown viewer id sees every card hidden, but
+  // still gets the discard pile and the log.
+  st = riggedGame([[['5','♥'],['9','♣'],['2','♦'],['K','♠']],[['3','♥'],['8','♣'],['7','♦'],['Q','♠']]]);
+  const spec = E.filteredView(st, 'not-a-player');
+  check('spectator view hides every card', spec.players.every(p => p.cards.every(c => c.rank === null && c.seen === false)));
+  check('spectator view still shows the discard and log', spec.discard.length >= 0 && Array.isArray(spec.log));
+  const own = E.filteredView(st, 'p0');
+  check('a real player still sees their own peeked cards as seen (rank stays hidden in the view)', own.players[0].cards[0].seen === true && own.players[0].cards[0].rank === null && own.players[0].cards[2].seen === false);
+
+  // UI wiring (string checks on the page source).
+  const uiSrc2 = blocks.find(s => s.includes('BOT_PACE'));
+  check('host join path has a 10s rejoin grace keyed by clientId', /disconnectedByClient/.test(uiSrc2) && /setTimeout\(\(\)=>\{ withdrawPlayer\(cid, seatId, clientId\); \}, 10000\)/.test(uiSrc2));
+  check('host join path serves spectators when a game is in progress', /t:'spectating'/.test(uiSrc2));
+  check('guest sends its persistent clientId when joining', /clientId:getClientId\(\)/.test(uiSrc2));
+  check('guest auto-retries the same code after a drop', /onGuestConnClose/.test(uiSrc2) && /Date\.now\(\)-disconnectAt>9000/.test(uiSrc2));
+  check('next round promotes waiting spectators up to the room max', /nextPlayers\.push\(\{id:cid, name:spectators\[cid\]\.name, isBot:false\}\)/.test(uiSrc2));
+  check('spectators cannot act (submitAction guard)', /amSpectator\(\)/.test(uiSrc2));
+  check('spectator seat renders a watching panel', /👀 Spectating/.test(uiSrc2));
+  check('host ignores actions from spectators', /if\(spectators\[cid\]\) return;/.test(uiSrc2));
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

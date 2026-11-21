@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Wellington Online v1.4 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
+<!-- Wellington Online v1.5 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -186,6 +186,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
       <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player's</b> — before the next card lands there. If you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Snapping someone's <b>last</b> card ends the game at once — they win with 0. The Wellington caller's cards are protected in the final round. Wrong rank? That card is shown, <b>goes back to its owner</b>, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on (so if you had 4 cards, you now have 5). <b>Advanced:</b> when setting up a room (or a bot game) you can turn <b>Snap tips</b> off — no banner at the top, just watch the middle yourself. Snapping still works exactly the same.</li>
       <li><b>WELLINGTON:</b> on your turn, before drawing, hit the big button when you think you're lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game — and nobody may touch the caller's cards during the final round.</li>
       <li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile.</li>
+      <li><b>Joining late?</b> If you join a game that's already in progress, you <b>spectate</b> — you see the table but every card stays face-down, and you join as a player from the next round. If your connection drops mid-game, you have <b>10 seconds</b> to reconnect and keep your seat; after that your cards go back into the draw pile and you spectate.</li>
     </ul>
   </div>
 </div>
@@ -247,7 +248,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   </div>
 </div>
 
-<footer>Wellington Online v1.4 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
+<footer>Wellington Online v1.5 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
 Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, nothing to sign up for. The host holds the true game state; each player only ever sees their own cards.</footer>
 </div>
 
@@ -399,6 +400,66 @@ function endGame(st, reason){
   st.winners=st.scores.filter(s=>s.total===best).map(s=>s.playerId);
   st.log.push(st.overReason+' Lowest score wins: '+st.winners.map(id=>playerById(st,id).name).join(', ')+' ('+best+').');
 }
+/* ---- removePlayer: a player leaves mid-game (disconnect past the
+   10s rejoin grace). Their cards go back into the draw pile (shuffled
+   in), the turn passes if it was theirs, a pending effect of theirs is
+   dropped, and the Wellington final round is repaired (caller leaving
+   cancels it; a leaver is struck from the remaining queue). If fewer
+   than 2 players remain, the game ends. */
+function removePlayer(st, playerId){
+  if(!st || st.phase==='over') return {ok:false, error:'no game in progress'};
+  const idx=playerIndex(st,playerId);
+  if(idx<0) return {ok:false, error:'unknown player'};
+  const gone=st.players[idx];
+  const wasTurnPlayer=idx===st.turnIdx;
+  const returned=gone.cards.slice();
+  if(st.phase==='drawn' && st.drawnBy===playerId && st.drawnCard){ returned.push(st.drawnCard); st.drawnCard=null; st.drawnBy=null; }
+  st.deck=shuffle(st.deck.concat(returned), mulberry32(((st.seed||0)+0x9e3779b9+st.turnCount)>>>0));
+  st.players.splice(idx,1);
+  st.log.push(gone.name+' left the match — their cards went back into the draw pile.');
+  // Wellington repair BEFORE anything that reads calledBy.
+  if(st.wellington.calledBy===playerId){
+    st.wellington={calledBy:null, active:false, remaining:[]};
+    if(st.phase==='final'||st.phase==='effect') st.phase='play';
+  } else if(st.wellington.active){
+    const ri=st.wellington.remaining.indexOf(playerId);
+    if(ri>=0) st.wellington.remaining.splice(ri,1);
+  }
+  // Drop the leaver's pending/queued effects; promote the next one.
+  if(st.pendingEffect&&st.pendingEffect.by===playerId) st.pendingEffect=null;
+  st.effectQueue=(st.effectQueue||[]).filter(e=>e.by!==playerId);
+  if(!st.pendingEffect&&st.effectQueue.length>0){ st.pendingEffect=st.effectQueue.shift(); st.phase='effect'; }
+  // Peek phase: if everyone left has finished peeking, start play.
+  if(st.phase==='peek'&&st.players.every(p=>p.peekDone)){
+    st.phase='play'; st.turnIdx=0; st.turnCount=0;
+    unlockForPlayer(st, currentPlayer(st));
+    st.log.push('All players peeked. '+currentPlayer(st).name+' starts.');
+  }
+  if(st.players.length<2){ endGame(st, gone.name+' left — only one player remains.'); return {ok:true, removed:playerId}; }
+  if(st.pendingEffect){
+    // Mid-effect owned by someone else: only the seat index shifts.
+    if(idx<st.turnIdx) st.turnIdx--;
+    return {ok:true, removed:playerId};
+  }
+  if(st.wellington.active){
+    if(st.wellington.remaining.length===0){ endGame(st,'Final round complete — Wellington was called by '+playerById(st,st.wellington.calledBy).name+'.'); return {ok:true, removed:playerId}; }
+    const ni=playerIndex(st, st.wellington.remaining[0]);
+    if(ni>=0){ st.turnIdx=ni; if(wasTurnPlayer) st.turnCount++; unlockForPlayer(st, currentPlayer(st)); st.phase='final'; }
+    return {ok:true, removed:playerId};
+  }
+  // Normal play: the turn passes only if it was theirs (never in peek).
+  if(st.phase!=='peek'){
+    if(idx<st.turnIdx) st.turnIdx--;
+    else if(wasTurnPlayer){
+      if(st.turnIdx>=st.players.length) st.turnIdx=0;
+      st.turnCount++;
+      unlockForPlayer(st, currentPlayer(st));
+      if(st.phase==='drawn'||st.phase==='effect') st.phase='play';
+    }
+  }
+  return {ok:true, removed:playerId};
+}
+
 function advanceTurn(st){
   if(st.wellington.active){
     // Remove the player who just finished from the front of the queue.
@@ -1041,7 +1102,7 @@ function canJoinRoom(roomInfo, currentCount){
   if(currentCount>=roomInfo.maxPlayers) return {ok:false, error:'room is full ('+roomInfo.players+'/'+roomInfo.maxPlayers+' players, bots included)'};
   return {ok:true};
 }
-if(typeof module!=='undefined'&&module.exports){ module.exports={CARD_POINTS,RANKS,SUITS,EFFECT_RANKS,EST_UNKNOWN,mulberry32,randomSeed,shuffle,cardPoints,scoreOf,ordinal,buildDeck,makeCardId,newGame,createGameState,currentPlayer,playerById,applyAction,legalActions,filteredView,stateFingerprint,serializeState,deserializeState,estimateTotal,botChooseAction,botMaybeSnap,botSnapChoice,effectKindForRank,topDiscard,DIRECTORY_SLOTS,directoryPeerId,createRoomInfo,canJoinRoom}; }
+if(typeof module!=='undefined'&&module.exports){ module.exports={CARD_POINTS,RANKS,SUITS,EFFECT_RANKS,EST_UNKNOWN,mulberry32,randomSeed,shuffle,cardPoints,scoreOf,ordinal,buildDeck,makeCardId,newGame,createGameState,currentPlayer,playerById,applyAction,legalActions,filteredView,stateFingerprint,serializeState,deserializeState,estimateTotal,botChooseAction,botMaybeSnap,botSnapChoice,effectKindForRank,topDiscard,removePlayer,DIRECTORY_SLOTS,directoryPeerId,createRoomInfo,canJoinRoom}; }
 </script>
 <script>
 "use strict";
@@ -1056,6 +1117,18 @@ let peer=null, conns={}, clients={}; // host: conn per client id
 let conn=null;            // guest: conn to host
 let pendingBotNames=[];   // bot names to add when the game starts
 let lobbyPlayers=[];      // {id,name,isBot} in lobby (host view)
+let spectators={};        // host: cid -> {name, clientId} watching a game in progress; join as players next round
+let disconnectedByClient={}; // host: clientId -> {cid, seatId, name, timer} — 10s rejoin grace after a drop
+let isSpectator=false;    // this client is watching (not playing) this game
+let myClientId=null;      // persistent per-browser id (localStorage) so the host recognises a rejoin
+function getClientId(){
+  if(myClientId) return myClientId;
+  try{
+    myClientId=localStorage.getItem('wellington-client-id');
+    if(!myClientId){ myClientId='w'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); localStorage.setItem('wellington-client-id', myClientId); }
+  }catch(e){ myClientId='w'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+  return myClientId;
+}
 let lobbyBots=0;
 let roomVisibility='private'; // 'private' (code-only) | 'public' (listed)
 let roomMaxPlayers=6;         // 2-6, bots included
@@ -1312,6 +1385,9 @@ function render(){
   if(view.pendingEffect&&view.pendingEffect.awaitingDecision&&view.pendingEffect.by===myId&&pendingEightPair&&!swapModalOpen) openSwapConfirm(pendingEightPair);
   const me=view.players.find(p=>p.id===myId)||view.players[0];
   const turnP=view.players.find(p=>p.id===view.turnPlayerId);
+  // Spectators watch only: no seat of their own, no actions, no snap
+  // banner. They join as players when the next round starts.
+  const isSpec=isSpectator||!view.players.some(p=>p.id===myId);
   // During the peek phase nobody is "to move" yet — the turn only starts
   // once everyone has finished peeking. (Before this fix the first
   // player's seat briefly said "your turn" while the status still said
@@ -1323,6 +1399,8 @@ function render(){
   if(view.phase==='over'){
     const winNames=(view.winners||[]).map(id=>{ const p=view.players.find(x=>x.id===id); return p?p.name:id; });
     status='🏆 '+(winNames.length>1?'Tie! ':'')+winNames.join(' & ')+' win'+(winNames.length>1?'':'s')+'!';
+  } else if(isSpec){
+    status='👀 Spectating — you join as a player from the next round.';
   } else if(view.phase==='peek'){
     status= me.peekDone ? 'Waiting for everyone to finish peeking…' : '👀 Peek phase — click 2 of your own cards to look at them, then press Done.';
   } else if(view.pendingEffect){
@@ -1345,7 +1423,7 @@ function render(){
   // the middle yourself), or when this player hit its ✕ (local, this
   // game only — it never changes the room setting for anyone else).
   // The banner never reveals a card value.
-  const snapOpen=view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over'&&view.snapTips!==false&&!snapTipsDismissed;
+  const snapOpen=view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over'&&view.snapTips!==false&&!snapTipsDismissed&&!isSpec;
   const banner=$('snapBanner');
   if(snapOpen){
     banner.classList.remove('hidden');
@@ -1357,7 +1435,7 @@ function render(){
   // A snap may take a matching card from ANY player's table, so during
   // the snap window every unlocked, unprotected card is a pickable
   // target (the Wellington caller's cards never are).
-  const snapWindowOpen=!!(view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over');
+  const snapWindowOpen=!!(view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over'&&!isSpec);
   // During my effect's opponent-pick step, opponent cards are the valid
   // targets (dashed gold); the Wellington caller's cards never are.
   const targetStep=!!(peff&&peff.by===myId&&!peff.awaitingDecision&&((peff.kind==='peekOther')||((peff.kind==='swapBlind'||peff.kind==='swapSeen')&&peff.hasOwn)));
@@ -1379,8 +1457,11 @@ function render(){
   $('discardCount').textContent=view.discard.length+' card'+(view.discard.length===1?'':'s');
   const top=view.discard.length?view.discard[view.discard.length-1]:null;
   $('discardPile').outerHTML='<div class="card-big'+(top&&((top.suit==='\u2665'||top.suit==='\u2666'))?' red':'')+'" id="discardPile">'+(top?('<span>'+esc(top.rank)+'</span><span class="suit">'+esc(top.suit)+'</span><span class="pts">'+cardPointsLabel(top)+' pts</span>'):'<span style="font-size:26px">—</span>')+'</div>';
-  // my seat
+  // my seat — spectators get a watching panel instead of cards
   const myBox=$('mySeat'); myBox.innerHTML='';
+  if(isSpec){
+    myBox.innerHTML='<div class="seat"><div class="sname">👀 Spectating</div><div style="color:var(--mut);font-size:14px;line-height:1.5;padding:6px 0">You are watching this game. You will join as a player when the next round starts — just stay on this screen.</div></div>';
+  } else {
   const md=document.createElement('div');
   // During my effect's opponent-pick step my own row is dimmed: my cards
   // are NOT valid targets there (the 8's own pick is already made).
@@ -1397,6 +1478,7 @@ function render(){
     el.addEventListener('click',()=>onMyCard(i));
     myCards.appendChild(el);
   });
+  } // end non-spectator seat
   // drawn card box
   const drawnBox=$('drawnBox');
   if(view.phase==='drawn'&&view.drawnCard&&view.drawnBy===myId){
@@ -1409,10 +1491,10 @@ function render(){
   const canCall=view.phase==='play'&&isMyTurn&&!view.wellington.calledBy;
   wbtn.disabled=!canCall;
   wbtn.textContent=view.wellington.calledBy?('🏆 WELLINGTON called by '+(view.players.find(p=>p.id===view.wellington.calledBy)||{}).name):'🏆 WELLINGTON';
-  // peek done button — after you peek, it blinks and the page scrolls to
-  // it, so it's obvious what to do next. Scrolls once per peek (when the
-  // reveal modal is closed), never on every render.
-  show('btnPeekDone', view.phase==='peek'&&!me.peekDone);
+  // peek done button — never for spectators (they are not players).
+  // After you peek it blinks and the page scrolls to it, once per peek
+  // (when the reveal modal is closed), never on every render.
+  show('btnPeekDone', !isSpec&&view.phase==='peek'&&!me.peekDone);
   $('btnPeekDone').textContent= me.peekedCount>=2 ? 'Done peeking — start game' : ('Done peeking ('+me.peekedCount+'/2 seen)');
   const peekBtn=$('btnPeekDone');
   if(view.phase==='peek'&&!me.peekDone&&me.peekedCount>0){
@@ -1457,7 +1539,9 @@ function showOver(){
 function hideOver(){ show('overModal',false); }
 
 /* ---------- clicks: route through applyAction (local/host) or the host (guest) ---------- */
+function amSpectator(){ return isSpectator || (view && !view.players.some(p=>p.id===myId)); }
 function submitAction(action){
+  if(amSpectator()){ toast('You are spectating — you join as a player next round.'); return; }
   if(playMode==='online'&&!isHost){ sendToHost({t:'action', action}); return; }
   doLocalAction(action);
 }
@@ -1528,6 +1612,10 @@ $('btnMenu2').onclick=backToMenu;
 $('btnOverMenu').onclick=()=>{ hideOver(); backToMenu(); };
 $('btnOverRematch').onclick=()=>{ hideOver(); requestRematch(); };
 function backToMenu(){
+  if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
+  for(const k of Object.keys(disconnectedByClient)){ clearTimeout(disconnectedByClient[k].timer); delete disconnectedByClient[k]; }
+  spectators={};
+  roomCode=null; isSpectator=false;
   unregisterPublicRoom();
   try{ if(conn) conn.close(); }catch(e){}
   try{ if(peer) peer.destroy(); }catch(e){}
@@ -1819,9 +1907,44 @@ function doCreateLobby(){
     const cid='c'+Math.random().toString(36).slice(2,8);
     conns[cid]=c; clients[cid]={name:'…'};
     c.on('data',msg=>handleHostMsg(cid,msg));
-    c.on('close',()=>{ delete conns[cid]; const ix=lobbyPlayers.findIndex(p=>p.id===cid); if(ix>=0) lobbyPlayers.splice(ix,1); if(fullState){ /* a player leaving mid-game: keep playing, their cards stay */ } renderLobby(); });
+    c.on('close',()=>{ onGuestDisconnect(cid); });
     c.on('open',()=>{ try{ c.send({t:'welcome', yourId:cid, code:roomCode}); }catch(e){} });
   });
+/* A guest's connection dropped. In the lobby they just leave the list.
+   Mid-game they get a 10s grace: their seat and cards stay, and if the
+   same browser rejoins (same clientId) within 10s they resume exactly
+   where they were. After 10s they are withdrawn (cards back in the
+   deck) and a later rejoin is as a spectator. Spectators just drop. */
+function onGuestDisconnect(cid){
+  const wasSpectator=!!spectators[cid];
+  delete conns[cid];
+  if(wasSpectator){ delete spectators[cid]; return; }
+  if(!fullState||fullState.phase==='over'){
+    const ix=lobbyPlayers.findIndex(p=>p.id===cid); if(ix>=0) lobbyPlayers.splice(ix,1);
+    renderLobby(); return;
+  }
+  const seatId=(clients[cid]&&clients[cid].seatId)||null;
+  const lp=lobbyPlayers.find(p=>p.id===cid);
+  const name=(lp&&lp.name)||(clients[cid]&&clients[cid].name)||'Player';
+  const clientId=(clients[cid]&&clients[cid].clientId)||null;
+  if(!seatId||!clientId){
+    const ix=lobbyPlayers.findIndex(p=>p.id===cid); if(ix>=0) lobbyPlayers.splice(ix,1);
+    broadcastViews(); return;
+  }
+  const timer=setTimeout(()=>{ withdrawPlayer(cid, seatId, clientId); }, 10000);
+  disconnectedByClient[clientId]={cid, seatId, name, timer};
+  fullState.log.push(name+' disconnected — 10 seconds to rejoin before their seat is withdrawn.');
+  broadcastViews();
+}
+function withdrawPlayer(cid, seatId, clientId){
+  if(clientId) delete disconnectedByClient[clientId];
+  if(!fullState) return;
+  removePlayer(fullState, seatId);
+  const ix=lobbyPlayers.findIndex(p=>p.id===cid); if(ix>=0) lobbyPlayers.splice(ix,1);
+  fullState.log.push('A player did not rejoin in time and was withdrawn from the match.');
+  broadcastViews();
+  if(fullState.phase==='over') showOver();
+}
   peer.on('error',err=>{ setMenuMsg('Could not create the lobby ('+(err&&err.type||'error')+'). Try again.'); });
 }
 /* ---- public rooms directory (PeerJS-only, no server) ----
@@ -1922,15 +2045,68 @@ function joinRoom(code){
     const c=peer.connect(peerIdFor(code),{reliable:true});
     conn=c;
     c.on('data',msg=>handleGuestMsg(msg));
-    c.on('close',()=>{ stopHeartbeat(); stopHelloLoop(); if(view&&view.phase!=='over'){ $('connBox').innerHTML='<b>Host disconnected.</b> The lobby is gone — head back to the menu for a new game.'; } });
-    c.on('open',()=>{ setMenuMsg('Joined lobby '+code+'! Say hi — waiting in the lobby…'); sendToHost({t:'join', name:myPlayerName()}); });
+    c.on('close',()=>{ onGuestConnClose(); });
+    c.on('open',()=>{ setMenuMsg('Joined lobby '+code+'! Say hi — waiting in the lobby…'); sendToHost({t:'join', name:myPlayerName(), clientId:getClientId()}); });
     setTimeout(()=>{ if(!conn||!conn.open) setMenuMsg('Still trying to reach lobby '+code+' — is the code right, and is the host\'s lobby still open?'); },6000);
   });
   peer.on('error',err=>{ setMenuMsg('Could not join lobby '+code+' ('+(err&&err.type||'error')+'). Double-check the code.'); });
 }
+let reconnectTimer=null, disconnectAt=0, reconnectAttempt=0;
+/* My connection to the host dropped. If the game is over, the host is
+   gone. Otherwise retry the same code (same clientId) so the host can
+   restore my seat within its 10s grace — a few quick tries, then stop. */
+function onGuestConnClose(){
+  stopHeartbeat(); stopHelloLoop();
+  if(!roomCode||reconnectTimer) return;
+  if(view&&view.phase==='over'){ $('connBox').innerHTML='<b>Host disconnected.</b> The lobby is gone — head back to the menu for a new game.'; return; }
+  disconnectAt=Date.now(); reconnectAttempt=0;
+  $('connBox').innerHTML='<b>Connection lost — rejoining…</b>';
+  const attempt=()=>{
+    reconnectTimer=null;
+    if(!roomCode) return;
+    if(Date.now()-disconnectAt>9000){ $('connBox').innerHTML='<b>Could not rejoin in time.</b> Your seat was withdrawn — join again from the menu to spectate.'; return; }
+    reconnectAttempt++;
+    joinRoom(roomCode);
+    reconnectTimer=setTimeout(attempt, reconnectAttempt===1?2500:3000);
+  };
+  reconnectTimer=setTimeout(attempt, 1200);
+}
 function handleHostMsg(cid, msg){
   if(!msg||typeof msg!=='object') return;
   if(msg.t==='join'){
+    // Rejoin within the 10s grace? Same browser (same clientId) resumes
+    // its seat, cards and all.
+    if(msg.clientId&&disconnectedByClient[msg.clientId]){
+      const d=disconnectedByClient[msg.clientId];
+      clearTimeout(d.timer); delete disconnectedByClient[msg.clientId];
+      conns[cid].gameId=d.seatId;
+      clients[cid]={name:msg.name||d.name, clientId:msg.clientId, seatId:d.seatId};
+      // The lobby entry still carries the OLD connection id — point it
+      // at the new one so the next round's seat map reaches them.
+      const lp=lobbyPlayers.find(p=>p.seatId===d.seatId)||lobbyPlayers.find(p=>p.name===d.name);
+      if(lp) lp.id=cid;
+      try{
+        conns[cid].send({t:'welcome', yourId:cid, code:roomCode});
+        conns[cid].send({t:'seat', yourId:d.seatId});
+        if(fullState) conns[cid].send({t:'view', view:filteredView(fullState,d.seatId), hash:stateFingerprint(fullState)});
+      }catch(e){}
+      if(fullState) fullState.log.push(d.name+' reconnected and resumed their seat.');
+      broadcastViews(); renderLobby();
+      return;
+    }
+    // Game already in progress: join as a spectator, play next round.
+    if(fullState&&fullState.phase!=='over'){
+      spectators[cid]={name:msg.name||'Player', clientId:msg.clientId||null};
+      clients[cid]={name:msg.name||'Player', clientId:msg.clientId||null};
+      try{
+        conns[cid].send({t:'welcome', yourId:cid, code:roomCode});
+        conns[cid].send({t:'spectating', code:roomCode});
+        conns[cid].send({t:'view', view:filteredView(fullState,cid), hash:stateFingerprint(fullState)});
+      }catch(e){}
+      fullState.log.push((msg.name||'Player')+' joined to spectate — they play from the next round.');
+      broadcastViews();
+      return;
+    }
     // Max-players enforcement (bots count: lobbyPlayers already includes them).
     const check=canJoinRoom(currentRoomInfo(), lobbyPlayers.length);
     if(!check.ok){
@@ -1939,12 +2115,13 @@ function handleHostMsg(cid, msg){
       delete conns[cid];
       return;
     }
-    clients[cid]={name:msg.name||'Player'};
+    clients[cid]={name:msg.name||'Player', clientId:msg.clientId||null};
     if(!lobbyPlayers.find(p=>p.id===cid)) lobbyPlayers.push({id:cid,name:msg.name||'Player',isBot:false});
     renderLobby();
     for(const id of Object.keys(conns)){ try{ conns[id].send({t:'lobby', players:lobbyPlayers, code:roomCode, maxPlayers:roomMaxPlayers, visibility:roomVisibility}); }catch(e){} }
   } else if(msg.t==='action'){
     if(!fullState) return;
+    if(spectators[cid]) return; // spectators watch only — they cannot act
     // Guests connect under a random connection id (cid); their in-game
     // seat id is stored on the connection when the game starts.
     const seatId=(conns[cid]&&conns[cid].gameId)||cid;
@@ -1972,8 +2149,9 @@ function handleHostMsg(cid, msg){
 }
 function handleGuestMsg(msg){
   if(!msg||typeof msg!=='object') return;
-  if(msg.t==='welcome'){ myId=msg.yourId; stateReceived=false; startHelloLoop(); }
-  else if(msg.t==='seat'){ myId=msg.yourId; }
+  if(msg.t==='welcome'){ myId=msg.yourId; stateReceived=false; startHelloLoop(); if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; } }
+  else if(msg.t==='seat'){ myId=msg.yourId; isSpectator=false; }
+  else if(msg.t==='spectating'){ isSpectator=true; if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; } }
   else if(msg.t==='join-rejected'){
     setMenuMsg('Could not join: '+(msg.error||'room is full.'));
     try{ if(conn) conn.close(); }catch(e){}
@@ -1989,6 +2167,8 @@ function handleGuestMsg(msg){
   }
   else if(msg.t==='view'){
     view=msg.view; stateReceived=true;
+    if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
+    if(view.players.some(p=>p.id===myId)) isSpectator=false;
     show('menuScreen',false); show('lobbyScreen',false); show('gameScreen',true);
     if(msg.result) handleActionResult(msg.result);
     render();
@@ -2009,7 +2189,23 @@ $('btnLeaveLobby').onclick=backToMenu;
 $('btnStartGame').onclick=()=>{ if(isHost) startHostedGame(); };
 function startHostedGame(){
   snapTipsDismissed=false; lastPeekNudge=0;
-  if(lobbyPlayers.length<2){ toast('Need at least 2 players to start.'); return; }
+  // Anyone still in the 10s rejoin grace when a new round starts is out
+  // of this round (they can spectate it and join the next one).
+  for(const k of Object.keys(disconnectedByClient)){
+    const d=disconnectedByClient[k]; clearTimeout(d.timer); delete disconnectedByClient[k];
+    const ix=lobbyPlayers.findIndex(p=>p.id===d.cid); if(ix>=0) lobbyPlayers.splice(ix,1);
+  }
+  // Next round's players: current lobby players, then waiting spectators
+  // in join order, up to the room max. Spectators who don't fit wait for
+  // the round after.
+  const nextPlayers=lobbyPlayers.slice();
+  for(const cid of Object.keys(spectators)){
+    if(nextPlayers.length>=roomMaxPlayers) break;
+    nextPlayers.push({id:cid, name:spectators[cid].name, isBot:false});
+    delete spectators[cid];
+  }
+  if(nextPlayers.length<2){ toast('Need at least 2 players to start.'); return; }
+  lobbyPlayers=nextPlayers;
   // The game is starting: leave the public directory so the room stops
   // being listed (it can no longer be joined mid-game).
   unregisterPublicRoom();
@@ -2018,10 +2214,10 @@ function startHostedGame(){
   // Map lobby ids to seat ids: host is p0, bots next, guests in join order.
   const seatIds=fullState.players.map(p=>p.id);
   const idMap={};
-  lobbyPlayers.forEach((p,i)=>{ idMap[p.id]=seatIds[i]; });
+  lobbyPlayers.forEach((p,i)=>{ idMap[p.id]=seatIds[i]; p.seatId=seatIds[i]; });
   // Guests keep their connection id as their key in conns, but their
   // in-game id is the seat id — store the mapping on the connection.
-  for(const cid of Object.keys(conns)){ const seat=idMap[cid]; if(seat){ conns[cid].gameId=seat; } }
+  for(const cid of Object.keys(conns)){ const seat=idMap[cid]; if(seat){ conns[cid].gameId=seat; if(clients[cid]) clients[cid].seatId=seat; } }
   // Rewrite applyAction routing for guests: host translates conn id -> seat id.
   // (handleHostMsg uses cid directly, so patch it via a lookup table.)
   window.__wellingtonSeatMap=idMap;
@@ -2031,6 +2227,7 @@ function startHostedGame(){
   $('connBox').innerHTML='Lobby <b>'+roomCode+'</b> — you are the host. Bots run on your device.'+(roomSnapTips?'':' Snap tips OFF (advanced — no banner).');
   // Tell every guest their seat id, then broadcast views.
   for(const cid of Object.keys(conns)){
+    if(!idMap[cid]) continue; // a spectator who didn't fit this round: no seat
     try{ conns[cid].send({t:'seat', yourId:idMap[cid]}); conns[cid].send({t:'view', view:filteredView(fullState, idMap[cid]), hash:stateFingerprint(fullState)}); }catch(e){}
   }
   broadcastViews(); startHeartbeat(); scheduleBots();

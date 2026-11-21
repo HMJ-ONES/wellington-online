@@ -81,12 +81,18 @@ The list is PeerJS-only, same $0 approach as the rest of the game:
 
 - A public-room host **also claims one directory slot**: a fixed PeerJS peer ID `wellington-directory-v1-1` … `wellington-directory-v1-10` (first free one wins).
 - Your browser **asks all 10 slots** and shows the rooms that answer with `{code, hostName, players, maxPlayers, bots, status}`. A slot with no answer is skipped.
-- The host **unregisters when the game starts or the room closes**, so the list only shows lobbies still waiting for players. (A game already in progress can't be joined mid-game.)
+- The host **unregisters when the game starts or the room closes**, so the list only shows lobbies still waiting for players. (A game already in progress can still be joined by code — as a spectator; see below.)
 - **Limits, stated honestly:** the list depends on hosts being online — if the directory doesn't answer, the page says so ("couldn't load the list — join with a code instead") and code-join still works. With 10 slots, at most 10 public rooms can be listed at once. There is no auto-join and no Play Anyone button, by design.
 
 ### Max players
 
 The host sets the max (2–6) when creating the lobby. Bots count toward it: the create screen won't let you pick a max below host + bots, and the host **rejects joins when full** (the joiner gets a "room is full" message). The lobby screen always shows `players / max`.
+
+### Spectating & rejoining
+
+- **Joining a game in progress:** enter the room code as usual — you join as a **spectator**. You see every seat, the discard pile and the log, but all cards stay face-down (a spectator's view hides every value) and you can't act. A "👀 Spectating" panel tells you you'll join as a player when the next round starts.
+- **Next round:** when a new game starts (Start / Rematch), waiting spectators are promoted to players in join order, up to the room max. Anyone who doesn't fit keeps spectating for the round after.
+- **Disconnecting mid-game:** if your connection drops, your seat and cards are held for **10 seconds** while the game waits for you. Your browser retries the same code automatically (same browser id), and if it reconnects in time you resume exactly where you were. After 10 seconds you're **withdrawn** — your cards go back into the draw pile (shuffled in), the turn passes if it was yours, and a later rejoin puts you in as a spectator. If the host's browser closes, the game ends for everyone (host-authoritative, no host migration).
 
 ## Bots
 
