@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Wellington Online v1.0 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
+<!-- Wellington Online v1.2 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -239,7 +239,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   </div>
 </div>
 
-<footer>Wellington Online v1.0 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
+<footer>Wellington Online v1.2 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
 Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, nothing to sign up for. The host holds the true game state; each player only ever sees their own cards.</footer>
 </div>
 
@@ -1232,7 +1232,12 @@ function render(){
   if(view.pendingEffect&&view.pendingEffect.awaitingDecision&&view.pendingEffect.by===myId&&pendingEightPair&&!swapModalOpen) openSwapConfirm(pendingEightPair);
   const me=view.players.find(p=>p.id===myId)||view.players[0];
   const turnP=view.players.find(p=>p.id===view.turnPlayerId);
-  const isMyTurn=view.turnPlayerId===myId;
+  // During the peek phase nobody is "to move" yet — the turn only starts
+  // once everyone has finished peeking. (Before this fix the first
+  // player's seat briefly said "your turn" while the status still said
+  // "waiting for everyone to finish peeking".)
+  const inPeek=view.phase==='peek';
+  const isMyTurn=view.turnPlayerId===myId&&!inPeek;
   // status
   let status='';
   if(view.phase==='over'){
@@ -1269,7 +1274,7 @@ function render(){
   const targetStep=!!(peff&&peff.by===myId&&!peff.awaitingDecision&&((peff.kind==='peekOther')||((peff.kind==='swapBlind'||peff.kind==='swapSeen')&&peff.hasOwn)));
   view.players.filter(p=>p.id!==myId).forEach(p=>{
     const d=document.createElement('div');
-    const active=p.id===view.turnPlayerId;
+    const active=p.id===view.turnPlayerId&&view.phase!=='peek';
     const isCaller=view.wellington.calledBy===p.id;
     d.className='seat'+(active?' active':'')+(isCaller?' caller':'');
     d.innerHTML='<div class="sname">'+esc(p.name)+(p.isBot?' 🤖':'')+' <span class="tag2">'+(isCaller?'🏆 called WELLINGTON — protected':(active?'• to move':''))+' • '+p.cards.length+' card'+(p.cards.length===1?'':'s')+'</span></div>'+
@@ -1398,6 +1403,7 @@ function onOpponentCard(pid, slot){
 }
 $('drawPile').addEventListener('click',()=>{
   if(!view) return;
+  if(view.phase==='peek'){ toast('Still peeking — press Done when everyone has looked at their cards.'); return; }
   if(view.turnPlayerId!==myId){ toast('Not your turn.'); return; }
   if(view.phase==='play'||view.phase==='final') submitAction({type:'draw'});
 });

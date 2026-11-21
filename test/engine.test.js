@@ -628,6 +628,11 @@ console.log('Bot pace + UI render rules (UI script block):');
     check('UI script shows a seen marker from .seen', /\.seen\b/.test(uiSrc));
     check('UI script has a transient-reveal flip-back (auto-close + Put it back)', /revealTimer/.test(uiSrc) && /transientReveal/.test(uiSrc));
     check('UI script has the 8 Swap/Keep confirm modal', /swapConfirmModal/.test(uiSrc) && /effectSwapConfirm/.test(uiSrc));
+    // Peek-phase turn indicator (live playtest Nov 21): nobody is "to move"
+    // until everyone has finished peeking, and a draw-pile click while
+    // peeking explains instead of silently doing nothing.
+    check('no seat claims the turn during the peek phase', /view\.turnPlayerId===myId&&!inPeek/.test(uiSrc) && /view\.phase!=='peek'/.test(uiSrc));
+    check('draw-pile click while peeking toasts an explanation', /Still peeking — press Done/.test(uiSrc));
   }
 }
 
