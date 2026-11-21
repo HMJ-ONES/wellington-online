@@ -637,6 +637,9 @@ console.log('Bot pace + UI render rules (UI script block):');
     // per peek (only once the reveal modal is closed), never every render.
     check('Done button blinks after peeking (doneblink keyframes + attention class)', /@keyframes doneblink/.test(html) && /#btnPeekDone\.attention/.test(html) && /classList\.add\('attention'\)/.test(uiSrc));
     check('Done button scrolls into view once per peek, modal-closed only', /lastPeekNudge/.test(uiSrc) && /scrollIntoView\(\{behavior:'smooth', block:'center'\}\)/.test(uiSrc) && /revealModal.*classList\.contains\('hidden'\)/.test(uiSrc));
+    // ✕ buttons: Rules modal (top-left) and the SNAP tip banner (top)
+    check('Rules modal has a top-left ✕ that closes it', /id="rulesCloseX"/.test(html) && /class="modal-x"/.test(html) && /\$\('rulesCloseX'\)\.onclick=\(\)=>show\('rulesModal',false\)/.test(uiSrc));
+    check('Snap banner has an ✕ that dismisses tips for this game only', /id="snapBannerX"/.test(html) && /snapTipsDismissed=true/.test(uiSrc) && /snapTipsDismissed=false/.test(uiSrc) && /!snapTipsDismissed/.test(uiSrc));
   }
 }
 

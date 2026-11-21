@@ -115,8 +115,14 @@ body.round-table #drawnBox{position:absolute;left:50%;top:67%;transform:translat
 .wellington-btn{width:100%;font-size:22px;padding:16px;background:linear-gradient(180deg,#fde68a,#f59e0b);color:#422006;border:3px solid #92400e;border-radius:14px;letter-spacing:.05em}
 .wellington-btn:disabled{background:#374151;color:#9ca3af;border-color:#1f2937}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
-.modal .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:520px;width:100%;max-height:88vh;overflow:auto}
+.modal .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:520px;width:100%;max-height:88vh;overflow:auto;position:relative}
 .modal .box h2{font-size:22px}
+.modal-x{position:absolute;top:8px;left:10px;background:transparent;border:none;color:var(--mut);font-size:22px;line-height:1;cursor:pointer;padding:6px 8px}
+.modal-x:hover{color:var(--txt)}
+#rulesModal h2{padding-left:30px}
+.snap-banner{display:flex;align-items:center;gap:10px}
+#snapBannerText{flex:1}
+#snapBannerX{background:transparent;border:none;color:#422006;font-size:20px;line-height:1;cursor:pointer;padding:2px 6px;font-weight:900}
 .bot-pick{display:flex;gap:10px;justify-content:center;margin:16px 0;flex-wrap:wrap}
 .bot-pick button{font-size:28px;padding:12px 18px;background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
 .lobby-player{display:flex;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--line);font-size:15px}
@@ -202,7 +208,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
 <!-- ============ GAME ============ -->
 <div id="gameScreen" class="hidden">
   <div class="status" id="statusBox">Waiting…<small id="statusSub"></small></div>
-  <div id="snapBanner" class="snap-banner hidden"></div>
+  <div id="snapBanner" class="snap-banner hidden"><span id="snapBannerText"></span><button id="snapBannerX" type="button" aria-label="Hide snap tips for this game">✕</button></div>
   <div class="table-wrap">
     <div class="seats" id="opponentsBox"></div>
     <div class="center-row">
@@ -271,6 +277,7 @@ Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, n
 </div></div>
 
 <div id="rulesModal" class="modal hidden"><div class="box">
+  <button id="rulesCloseX" type="button" class="modal-x" aria-label="Close rules">✕</button>
   <h2>📖 Wellington — rules &amp; points</h2>
   <div id="rulesBody" style="font-size:14px;line-height:1.6;color:var(--mut)"></div>
   <div class="row" style="justify-content:center;margin-top:14px"><button id="rulesClose" type="button">Got it</button></div>
@@ -1060,6 +1067,7 @@ let cognacSips=0, cognacLevel='sober', cognacUntil=0, cognacTickTimer=null;
 /* ---- Animations + transient reveals (visual only, never gate the engine) ---- */
 let lastAnim=null, animSeq=0, playedAnimId=0;
 let lastPeekNudge=0; // peekedCount last scrolled to Done for (so we scroll once per peek, not on every render)
+let snapTipsDismissed=false; // this player hit the banner's ✕ — hide snap tips for the rest of this game only
 let transientReveals=[]; // [{playerId, slot, card}] — a card flips face-up ONLY while its reveal modal is open
 let revealTimer=null;
 let pendingEightPair=null, swapModalOpen=false;
@@ -1119,11 +1127,14 @@ function rulesHtml(){
 function openRules(){ $('rulesBody').innerHTML=rulesHtml(); show('rulesModal',true); }
 $('btnRules').onclick=openRules; $('btnRules2').onclick=openRules;
 $('rulesClose').onclick=()=>show('rulesModal',false);
+$('rulesCloseX').onclick=()=>show('rulesModal',false);
+$('snapBannerX').onclick=()=>{ snapTipsDismissed=true; show('snapBanner',false); toast('Snap tips off for this game — you can still snap by watching the middle.'); };
 $('revealClose').onclick=()=>closeReveal();
 
 /* ---------- local / host game bootstrap ---------- */
 function botNames(n){ const pool=['Ada','Boris','Cleo','Dante','Esme','Felix']; return pool.slice(0,n).map(x=>x+' (bot)'); }
 function startLocalGame(names, seed, opts){
+  snapTipsDismissed=false; lastPeekNudge=0;
   fullState=newGame(names, seed, opts);
   myId=fullState.players[0].id;
   playMode='local'; isHost=true;
@@ -1260,14 +1271,19 @@ function render(){
     status= isMyTurn?'Your turn — draw a card, or call WELLINGTON if you\'re lowest.':(turnP?turnP.name+'\'s turn.':'');
   }
   $('statusBox').innerHTML=esc(status)+'<small>'+esc(view.phase==='peek'?'Peek once at the start only.':(view.deckCount+' cards in the draw pile • '+view.discard.length+' in the middle'))+'</small>';
+  // A fresh peek phase (nobody has peeked yet) means a new game — the
+  // banner's ✕ dismissal only ever lasts one game, for every player.
+  if(view.phase==='peek'&&view.players.every(p=>p.peekedCount===0&&!p.peekDone)) snapTipsDismissed=false;
   // snap banner — hidden entirely when the room turned Snap tips off
   // (advanced, distraction-free: snapping still works, you just watch
-  // the middle yourself). The banner never reveals a card value.
-  const snapOpen=view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over'&&view.snapTips!==false;
+  // the middle yourself), or when this player hit its ✕ (local, this
+  // game only — it never changes the room setting for anyone else).
+  // The banner never reveals a card value.
+  const snapOpen=view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over'&&view.snapTips!==false&&!snapTipsDismissed;
   const banner=$('snapBanner');
   if(snapOpen){
     banner.classList.remove('hidden');
-    banner.textContent='⚡ SNAP! Top of the middle is '+view.snapWindow.topRank+' — click one of YOUR cards if you hold a '+view.snapWindow.topRank+' (you may snap more than once in this window). Snaps never trigger effects.';
+    $('snapBannerText').textContent='⚡ SNAP! Top of the middle is '+view.snapWindow.topRank+' — click one of YOUR cards if you hold a '+view.snapWindow.topRank+' (you may snap more than once in this window). Snaps never trigger effects.';
   } else banner.classList.add('hidden');
   // opponents
   const oppBox=$('opponentsBox'); oppBox.innerHTML='';
@@ -1916,6 +1932,7 @@ $('btnCopyLobby').onclick=async()=>{
 $('btnLeaveLobby').onclick=backToMenu;
 $('btnStartGame').onclick=()=>{ if(isHost) startHostedGame(); };
 function startHostedGame(){
+  snapTipsDismissed=false; lastPeekNudge=0;
   if(lobbyPlayers.length<2){ toast('Need at least 2 players to start.'); return; }
   // The game is starting: leave the public directory so the room stops
   // being listed (it can no longer be joined mid-game).
