@@ -631,5 +631,31 @@ console.log('Bot pace + UI render rules (UI script block):');
   }
 }
 
+console.log('Snap tips room setting (advanced, distraction-free):');
+{
+  const def = E.newGame(['A', 'B'], 5);
+  check('snap tips default ON', def.snapTips === true && E.filteredView(def, 'p0').snapTips === true);
+  const off = E.newGame(['A', 'B'], 5, { snapTips: false });
+  check('snapTips:false opt turns the setting off', off.snapTips === false && E.filteredView(off, 'p0').snapTips === false);
+  const off2 = E.deserializeState(E.serializeState(off));
+  check('snap-tips setting survives serialize/deserialize', off2.snapTips === false);
+  // Snapping itself is unchanged when tips are off: the window still opens
+  // and a matching snap is still a legal action — only the banner is gone.
+  finishPeek(off);
+  E.applyAction(off, 'p0', { type: 'draw' });
+  E.applyAction(off, 'p0', { type: 'discardDrawn' });
+  check('snap window still opens with tips off', off.snapWindow.open === true);
+  const acts = E.legalActions(off, 'p1');
+  check('snap still offered as an action with tips off', acts.some(a => a.type === 'snap'));
+  // UI: both setup screens offer the toggle, and render gates the banner.
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  check('room settings modal has a Snap-tips checkbox (default on)', /id="roomSnapTips"[^>]*checked/.test(html));
+  check('bot setup modal has a Snap-tips checkbox (default on)', /id="botSnapTips"[^>]*checked/.test(html));
+  check('banner render is gated on view.snapTips', /snapTips!==false/.test(html));
+  check('hosted game passes the room setting into newGame', /newGame\(names, undefined, \{snapTips: roomSnapTips\}\)/.test(html));
+  check('bot game passes its checkbox into newGame', /startLocalGame\(names, undefined, \{snapTips: \$\('botSnapTips'\)\.checked\}\)/.test(html));
+  check('rematch keeps the game\'s snap-tips setting', /snapTips: fullState\?fullState\.snapTips!==false:true/.test(html));
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

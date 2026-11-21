@@ -42,6 +42,8 @@ Each player gets **4 cards face-down** in a row. Peek at 2 of your own, then tak
    **Snapped cards never trigger effects** — not even a snapped 5, 6, 7 or 8. Snaps are effect-free discards only.
    
    **Wrong snap:** the card you picked is shown, goes back to its slot, and you must take a **penalty card** from the deck (an extra face-down card in your row).
+
+   **Snap tips (advanced):** when setting up a room — or a bot game — the host can turn **Snap tips** off. The SNAP banner at the top disappears, so advanced players can play distraction-free and focus on their own game; snapping still works exactly the same, you just watch the middle yourself. The setting is per-room, shown in the lobby, and kept on rematch. On by default.
 5. **WELLINGTON:** on your turn, **before drawing**, hit the big WELLINGTON button when you think you're lowest. Your turn ends at once and every other player gets exactly **one last turn**, in clockwise order, then all cards are revealed and scored. Only one player can call it, once per game — after that the button is disabled for everyone. During the final round **nobody may touch the caller's cards** in any way (6/7/8 can't target them), but 5/6/7/8 may still be used on other players.
 6. **Deck runs out?** The discard pile (except its top card) is reshuffled into a new draw pile. If deck and discard are both exhausted, the game ends and cards are revealed.
 7. **0 cards:** snapping your last card ends the game immediately — you score 0.

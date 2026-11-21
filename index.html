@@ -175,7 +175,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
       <li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down. A small gold dot marks cards you have seen.</li>
       <li><b>Your turn:</b> draw the top card and look at it. Either <b>swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b> face-up. Exactly one discard per turn.</li>
       <li><b>Card effects</b> trigger ONLY on a normal turn discard (the drawn card you discard, or the table card you swap out): <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player's, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at both cards, then <b>choose</b> whether to swap them. Exactly one effect per turn discard. <b>Snapped cards never trigger effects</b> — not even a snapped 5, 6, 7 or 8.</li>
-      <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> from their own table before the next card lands there — and if you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Wrong rank? That card is shown, goes back, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on.</li>
+      <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> from their own table before the next card lands there — and if you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Wrong rank? That card is shown, goes back, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on. <b>Advanced:</b> when setting up a room (or a bot game) you can turn <b>Snap tips</b> off — no banner at the top, just watch the middle yourself. Snapping still works exactly the same.</li>
       <li><b>WELLINGTON:</b> on your turn, before drawing, hit the big button when you think you're lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game — and nobody may touch the caller's cards during the final round.</li>
       <li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile.</li>
     </ul>
@@ -246,6 +246,7 @@ Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, n
 <div id="botModal" class="modal hidden"><div class="box">
   <h2 id="botModalTitle">How many bots?</h2><p id="botModalSub">Bots fill the remaining seats (max 6 players total).</p>
   <div class="bot-pick" id="botPick"></div>
+  <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.4;margin-top:10px;text-align:left"><input type="checkbox" id="botSnapTips" checked style="margin-top:3px"> <span><b>⚡ Snap tips</b> — show the SNAP banner at the top. Turn it off for advanced players: no hints, just watch the middle yourself.</span></label>
   <div class="row" style="justify-content:center"><button id="botCancel" type="button" class="ghost">Cancel</button></div>
 </div></div>
 
@@ -258,6 +259,7 @@ Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, n
   </div>
   <p>Maximum players (2–6, bots included):</p>
   <div class="bot-pick" id="maxPick"></div>
+  <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.4;margin-top:6px"><input type="checkbox" id="roomSnapTips" checked style="margin-top:3px"> <span><b>⚡ Snap tips</b> — show the SNAP banner at the top. Turn it off for advanced players: no hints, just watch the middle yourself. Snapping still works exactly the same.</span></label>
   <p id="roomOptMsg" style="min-height:20px;color:var(--mut);font-size:14px"></p>
   <p style="font-size:13px">Public rooms appear in “Browse public rooms” while they wait for players, and leave the list when the game starts. Private rooms are code-only.</p>
   <div class="row" style="justify-content:center">
@@ -343,6 +345,7 @@ function newGame(playerNames, seed, opts){
   const state={ seed:s, players, deck, discard:[], turnIdx:0, turnCount:0,
     phase:'peek', drawnCard:null, drawnBy:null,
     snapWindow:{open:false, topRank:null},
+    snapTips: opts.snapTips!==false, // room setting: show the SNAP banner? (advanced players can turn it off at setup)
     wellington:{calledBy:null, active:false, remaining:[]},
     pendingEffect:null, effectQueue:[], log:['Game started — peek at 2 of your own cards, then press Done.'],
     winners:null, scores:null, overReason:'', version:1 };
@@ -794,6 +797,7 @@ function filteredView(st, viewerId){
     turnPlayerId:currentPlayer(st).id, players, deckCount:st.deck.length,
     discard:clone(st.discard),
     snapWindow:clone(st.snapWindow),
+    snapTips: st.snapTips!==false,
     drawnCard:drawn, hasDrawn:!!st.drawnCard, drawnBy:st.drawnBy,
     wellington:clone(st.wellington),
     pendingEffect: st.pendingEffect ? {kind:st.pendingEffect.kind, rank:st.pendingEffect.rank, by:st.pendingEffect.by, ownSlot:st.pendingEffect.ownSlot, hasOwn:st.pendingEffect.ownSlot!==null&&st.pendingEffect.ownSlot!==undefined, awaitingDecision:!!st.pendingEffect.awaitingDecision, targetPlayerId:st.pendingEffect.targetPlayerId||null, targetSlot:(st.pendingEffect.targetSlot===undefined||st.pendingEffect.targetSlot===null?null:st.pendingEffect.targetSlot)} : null,
@@ -986,6 +990,7 @@ let lobbyPlayers=[];      // {id,name,isBot} in lobby (host view)
 let lobbyBots=0;
 let roomVisibility='private'; // 'private' (code-only) | 'public' (listed)
 let roomMaxPlayers=6;         // 2-6, bots included
+let roomSnapTips=true;        // room setting: show the SNAP banner? (advanced players turn it off)
 let pendingLobbyBots=0;
 let dirPeer=null, dirSlot=0;  // public-room directory registration (host only)
 let lastAckedN=-1, resendTimer=null, heartbeatTimer=null, helloTimer=null, stateReceived=false;
@@ -1100,7 +1105,7 @@ function rulesHtml(){
   '<li><b>Your turn:</b> draw the top card, look at it. <b>Swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b>. One discard per turn.</li>'+
   '<li><b>Effects — ONLY on a normal turn discard</b> (drawn card discarded, or swapped-out table card). Exactly one effect per turn discard: <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player\'s, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at BOTH cards, then <b>choose</b> whether to swap them (Swap / Keep as they are). The effect must resolve before the turn passes.</li>'+
   '<li><b>Snaps NEVER trigger effects.</b> A snapped 5, 6, 7 or 8 is an effect-free discard — no peek, no swap.</li>'+
-  '<li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> before the next card lands there. Holding two of that rank? Snap <b>twice in a row</b> in the same window. Click one of your own cards while the SNAP banner is showing to try.</li>'+
+  '<li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> before the next card lands there. Holding two of that rank? Snap <b>twice in a row</b> in the same window. Click one of your own cards while the SNAP banner is showing to try. <b>Advanced:</b> the room setup can turn <b>Snap tips</b> off — no banner, just watch the middle yourself.</li>'+
   '<li><b>Wrong snap:</b> the card is shown, goes back to its slot, and you must take a <b>penalty card</b> (extra face-down card). You <b>cannot discard it right away</b> — not by snapping it, not by swapping it out, not by a 7/8 swap. From your <b>next turn on</b> it is a normal card: swap it out or snap it like any other.</li>'+
   '<li><b>WELLINGTON:</b> on your turn, <b>before drawing</b>, hit the big button when you think you\'re lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game. During the final round <b>nobody may touch the caller\'s cards</b> (no 6/7/8 on them) — but 5/6/7/8 may still be used on other players.</li>'+
   '<li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile. If deck and discard are both exhausted, the game ends and cards are revealed.</li>'+
@@ -1115,13 +1120,13 @@ $('revealClose').onclick=()=>closeReveal();
 
 /* ---------- local / host game bootstrap ---------- */
 function botNames(n){ const pool=['Ada','Boris','Cleo','Dante','Esme','Felix']; return pool.slice(0,n).map(x=>x+' (bot)'); }
-function startLocalGame(names, seed){
-  fullState=newGame(names, seed);
+function startLocalGame(names, seed, opts){
+  fullState=newGame(names, seed, opts);
   myId=fullState.players[0].id;
   playMode='local'; isHost=true;
   gameId++;
   show('menuScreen',false); show('lobbyScreen',false); show('gameScreen',true);
-  $('connBox').textContent='Local game vs bots — no network needed.';
+  $('connBox').textContent='Local game vs bots — no network needed.'+(fullState.snapTips===false?' Snap tips OFF (advanced — no banner).':'');
   refreshView(); render(); scheduleBots();
 }
 function refreshView(){
@@ -1247,8 +1252,10 @@ function render(){
     status= isMyTurn?'Your turn — draw a card, or call WELLINGTON if you\'re lowest.':(turnP?turnP.name+'\'s turn.':'');
   }
   $('statusBox').innerHTML=esc(status)+'<small>'+esc(view.phase==='peek'?'Peek once at the start only.':(view.deckCount+' cards in the draw pile • '+view.discard.length+' in the middle'))+'</small>';
-  // snap banner
-  const snapOpen=view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over';
+  // snap banner — hidden entirely when the room turned Snap tips off
+  // (advanced, distraction-free: snapping still works, you just watch
+  // the middle yourself). The banner never reveals a card value.
+  const snapOpen=view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over'&&view.snapTips!==false;
   const banner=$('snapBanner');
   if(snapOpen){
     banner.classList.remove('hidden');
@@ -1420,9 +1427,9 @@ function backToMenu(){
 function requestRematch(){
   if(playMode==='online'&&!isHost){ sendToHost({t:'rematch-request'}); toast('Rematch requested — waiting for host…'); return; }
   if(playMode==='online'&&isHost){ startHostedGame(); return; }
-  // local vs bots: same players, new deal
+  // local vs bots: same players, new deal — keep this game's Snap-tips setting
   const names=fullState?fullState.players.map(p=>({name:p.name,isBot:p.isBot})):[{name:myName,isBot:false}];
-  startLocalGame(names);
+  startLocalGame(names, undefined, {snapTips: fullState?fullState.snapTips!==false:true});
 }
 
 /* ---------- bots (local + host-run) ----------
@@ -1619,7 +1626,7 @@ function startHelloLoop(){ stopHelloLoop(); helloTimer=setInterval(()=>{ if(!sta
 function stopHelloLoop(){ clearInterval(helloTimer); helloTimer=null; }
 function renderLobby(){
   $('lobbyCode').textContent=roomCode||'';
-  $('lobbyMsg').textContent=(roomVisibility==='public'?'🌍 Public room — listed in Browse public rooms while it waits for players. ':'🔒 Private room — code-only. ')+'Max '+roomMaxPlayers+' players (bots included). Share the code with your friends.';
+  $('lobbyMsg').textContent=(roomVisibility==='public'?'🌍 Public room — listed in Browse public rooms while it waits for players. ':'🔒 Private room — code-only. ')+'Max '+roomMaxPlayers+' players (bots included). Snap tips '+(roomSnapTips?'ON':'OFF — advanced, no banner')+'. Share the code with your friends.';
   $('lobbyList').innerHTML=lobbyPlayers.map(p=>'<div class="lobby-player"><span>'+esc(p.name)+(p.isBot?' 🤖':'')+'</span><span style="color:var(--mut)">'+(p.isHost?'host':'')+'</span></div>').join('')+
     '<p style="color:var(--mut);font-size:13px;margin-top:8px">'+lobbyPlayers.length+' / '+roomMaxPlayers+' players — need at least 2 to start.</p>';
   const hostView=isHost;
@@ -1647,12 +1654,13 @@ $('btnBots').onclick=()=>{
   openBotPicker('How many bots?', 'You + bots, 2–6 players total. Fully local, works offline.', (n)=>{
     if(n<1){ setMenuMsg('Pick at least 1 bot for a solo game — or create a lobby to play with friends.'); return; }
     const names=[{name:myPlayerName(),isBot:false}].concat(botNames(n).map(x=>({name:x,isBot:true})));
-    startLocalGame(names);
+    startLocalGame(names, undefined, {snapTips: $('botSnapTips').checked});
   });
 };
 /* ---- create lobby: bots -> visibility + max players -> create ---- */
 function openRoomOptions(){
-  roomVisibility='private'; roomMaxPlayers=6;
+  roomVisibility='private'; roomMaxPlayers=6; roomSnapTips=true;
+  const snapBox=$('roomSnapTips'); if(snapBox) snapBox.checked=true;
   const minMax=1+pendingLobbyBots; // host + bots already take seats
   const visBox=$('visPick');
   const paintVis=()=>{ visBox.querySelectorAll('button').forEach(b=>{ b.style.outline=(b.getAttribute('data-vis')===roomVisibility)?'3px solid var(--gold)':'none'; }); };
@@ -1672,7 +1680,7 @@ function openRoomOptions(){
   show('roomOptModal',true);
 }
 $('roomOptCancel').onclick=()=>show('roomOptModal',false);
-$('roomOptCreate').onclick=()=>{ show('roomOptModal',false); doCreateLobby(); };
+$('roomOptCreate').onclick=()=>{ roomSnapTips=$('roomSnapTips').checked; show('roomOptModal',false); doCreateLobby(); };
 $('btnCreate').onclick=()=>{
   if(typeof Peer==='undefined'){ setMenuMsg('Could not load the multiplayer library (PeerJS). Check your connection — bot play still works.'); return; }
   openBotPicker('Create lobby — how many bots?', 'Bots fill seats in your lobby (max 6 players total: humans + bots).', (n)=>{
@@ -1891,7 +1899,7 @@ function startHostedGame(){
   // being listed (it can no longer be joined mid-game).
   unregisterPublicRoom();
   const names=lobbyPlayers.map(p=>({name:p.name,isBot:p.isBot}));
-  fullState=newGame(names);
+  fullState=newGame(names, undefined, {snapTips: roomSnapTips});
   // Map lobby ids to seat ids: host is p0, bots next, guests in join order.
   const seatIds=fullState.players.map(p=>p.id);
   const idMap={};
@@ -1905,7 +1913,7 @@ function startHostedGame(){
   myId=seatIds[0]; // host is first in lobby list
   isHost=true; playMode='online'; gameId++;
   show('lobbyScreen',false); show('menuScreen',false); show('gameScreen',true);
-  $('connBox').innerHTML='Lobby <b>'+roomCode+'</b> — you are the host. Bots run on your device.';
+  $('connBox').innerHTML='Lobby <b>'+roomCode+'</b> — you are the host. Bots run on your device.'+(roomSnapTips?'':' Snap tips OFF (advanced — no banner).');
   // Tell every guest their seat id, then broadcast views.
   for(const cid of Object.keys(conns)){
     try{ conns[cid].send({t:'seat', yourId:idMap[cid]}); conns[cid].send({t:'view', view:filteredView(fullState, idMap[cid]), hash:stateFingerprint(fullState)}); }catch(e){}
