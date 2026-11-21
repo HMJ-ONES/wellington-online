@@ -37,11 +37,11 @@ The values live in one easily-editable const at the top of the engine in `index.
    - **8** — exchange 1 of your cards with 1 of another player's, looking at **both** first — then you choose **Swap** or **Keep as they are**. Declining ends the effect with no swap (the look still counts as the effect used). The pair is always exactly one of your cards + one opponent's card — you can never look at two of your own cards with an 8.
    
    The effect must resolve before the turn passes.
-4. **Snap!** Whenever a card lands in the middle, **any** player may discard a card of the **same rank** from their own table, at any moment before the next card lands in the middle. Click one of your own cards while the SNAP banner is showing. If you hold two of that rank, you may snap **twice in a row** in the same window.
-   
+4. **Snap!** Whenever a card lands in the middle, **any** player may discard a card of the **same rank** — from their own table **or from any other player's table** — at any moment before the next card lands in the middle. Click a card (yours or anyone else's) while the SNAP banner is showing. If you hold two of that rank, you may snap **twice in a row** in the same window. Snapping someone's **last** card ends the game at once — they win with 0. The Wellington caller's cards are protected: nobody may snap them in the final round.
+
    **Snapped cards never trigger effects** — not even a snapped 5, 6, 7 or 8. Snaps are effect-free discards only.
-   
-   **Wrong snap:** the card you picked is shown, goes back to its slot, and you must take a **penalty card** from the deck (an extra face-down card in your row).
+
+   **Wrong snap:** the card you picked is shown, **goes back to its owner**, and you must take a **penalty card** from the deck (an extra face-down card in your row — so if you had 4 cards, you now have 5).
 
    **Snap tips (advanced):** when setting up a room — or a bot game — the host can turn **Snap tips** off. The SNAP banner at the top disappears, so advanced players can play distraction-free and focus on their own game; snapping still works exactly the same, you just watch the middle yourself. The setting is per-room, shown in the lobby, and kept on rematch. On by default.
 5. **WELLINGTON:** on your turn, **before drawing**, hit the big WELLINGTON button when you think you're lowest. Your turn ends at once and every other player gets exactly **one last turn**, in clockwise order, then all cards are revealed and scored. Only one player can call it, once per game — after that the button is disabled for everyone. During the final round **nobody may touch the caller's cards** in any way (6/7/8 can't target them), but 5/6/7/8 may still be used on other players.

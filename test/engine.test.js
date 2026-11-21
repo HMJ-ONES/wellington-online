@@ -368,6 +368,65 @@ console.log('Snap — correct, wrong, multiple, and snaps NEVER trigger effects:
   check('snap with empty discard pile rejected', !E.applyAction(st2, 'p1', { type: 'snap', slot: 0 }).ok);
 }
 
+console.log('Cross-player snap (owner change, Nov 21): any player may snap a matching card from ANY player\'s table:');
+{
+  // Correct cross-snap: P0 snaps P1's 9. P1 loses the card, P0 unchanged.
+  let st = riggedGame([
+    [['A','♠'],['K','♥'],['2','♦'],['3','♣']],
+    [['2','♠'],['3','♥'],['9','♠'],['6','♣']],
+  ], { discardTop: ['9','♦'], turnIdx: 0 });
+  let r = E.applyAction(st, 'p0', { type: 'snap', slot: 2, targetPlayerId: 'p1' });
+  check('cross-snap correct ok', r.ok && r.correct && r.snapped.rank === '9' && r.targetPlayerId === 'p1');
+  check('cross-snap: target loses the card (4 -> 3), snapper unchanged (4)', st.players[1].cards.length === 3 && st.players[0].cards.length === 4);
+  check('cross-snap: card lands in the middle', st.discard[st.discard.length - 1].rank === '9');
+  // Wrong cross-snap: P0 tries P1's 3 against a 9 — card returns to P1,
+  // P0 draws a penalty card (4 -> 5, locked).
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['2','♦'],['3','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { discardTop: ['9','♦'], turnIdx: 0, deck: [['K','♠'],['7','♥']] });
+  r = E.applyAction(st, 'p0', { type: 'snap', slot: 1, targetPlayerId: 'p1' });
+  check('wrong cross-snap ok:true, correct:false', r.ok && r.correct === false && r.targetPlayerId === 'p1');
+  check('wrong cross-snap: attempted card shown', r.attempted && r.attempted.rank === '3');
+  check('wrong cross-snap: card RETURNS to its owner (P1 still 4, 3 in slot 1)', st.players[1].cards.length === 4 && st.players[1].cards[1].rank === '3');
+  check('wrong cross-snap: snapper draws a penalty card (4 -> 5, locked)', st.players[0].cards.length === 5 && st.players[0].cards[4].locked === true);
+  // Locked target card: nobody may snap anyone's locked card.
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['2','♦'],['3','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { discardTop: ['9','♦'], turnIdx: 0 });
+  st.players[1].cards[2] = { id: '9♠', rank: '9', suit: '♠', locked: true, penaltyTurn: 0 };
+  r = E.applyAction(st, 'p0', { type: 'snap', slot: 2, targetPlayerId: 'p1' });
+  check('snap of a locked card rejected (no penalty, no card moved)', !r.ok && st.players[1].cards.length === 4 && st.players[0].cards.length === 4);
+  // Snapping the target's LAST card ends the game — the target wins with 0.
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['2','♦'],['3','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { discardTop: ['9','♦'], turnIdx: 0 });
+  st.players[1].cards = [card('9','♠')];
+  r = E.applyAction(st, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  check('snapping the target\'s last card ends the game', r.ok && r.correct && r.gameOver && st.phase === 'over');
+  check('target with 0 cards wins (score 0)', st.winners.join(',') === 'p1' && st.scores.find(s => s.playerId === 'p1').total === 0);
+  // Wellington caller's cards are protected from snaps in the final round.
+  st = riggedGame([
+    [['9','♠'],['K','♥'],['2','♦'],['3','♣']],
+    [['9','♥'],['3','♥'],['4','♦'],['6','♣']],
+  ], { discardTop: ['9','♦'], turnIdx: 0 });
+  st.wellington = { calledBy: 'p1', active: true, remaining: ['p0'] };
+  st.phase = 'final';
+  r = E.applyAction(st, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  check('snap of the Wellington caller\'s card rejected', !r.ok);
+  r = E.applyAction(st, 'p0', { type: 'snap', slot: 0 });
+  check('snap of a non-caller\'s card still works in the final round', r.ok && r.correct);
+  // legalActions lists cross-player snap targets.
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['2','♦'],['3','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { discardTop: ['9','♦'], turnIdx: 0 });
+  const acts = E.legalActions(st, 'p0');
+  check('legalActions includes cross-player snap targets', acts.some(a => a.type === 'snap' && a.targetPlayerId === 'p1'));
+}
+
 console.log('Penalty card: locked at once, normal from next turn on (owner correction #1):');
 {
   // P1 wrong-snaps, gets a locked penalty card. It cannot be snapped or
@@ -640,6 +699,16 @@ console.log('Bot pace + UI render rules (UI script block):');
     // ✕ buttons: Rules modal (top-left) and the SNAP tip banner (top)
     check('Rules modal has a top-left ✕ that closes it', /id="rulesCloseX"/.test(html) && /class="modal-x"/.test(html) && /\$\('rulesCloseX'\)\.onclick=\(\)=>show\('rulesModal',false\)/.test(uiSrc));
     check('Rules points table reads CARD_POINTS (cannot go stale)', /function pointsTableHtml/.test(uiSrc) && /CARD_POINTS\['J'\]/.test(uiSrc) && /CARD_POINTS\['Joker'\]/.test(uiSrc) && /CARD_POINTS\['K'\]/.test(uiSrc) && /CARD_POINTS\['A'\]/.test(uiSrc));
+    // Cross-player snap UI: any player's card is clickable in the window,
+    // and a wrong snap reveals the card on its OWNER's seat.
+    check('opponent card click during snap window submits a cross-player snap', /function onOpponentCard/.test(uiSrc) && /snapWindow&&view\.snapWindow\.open/.test(uiSrc.split('function onOpponentCard')[1]) && /targetPlayerId:pid, slot/.test(uiSrc.split('function onOpponentCard')[1]));
+    check('wrong-snap reveal lands on the target player\'s seat', /res\.targetPlayerId\|\|myId/.test(uiSrc) && /'Wrong snap!'/.test(uiSrc));
+    check('snap window marks every player\'s cards pickable (not the caller\'s)', /snapWindowOpen/.test(uiSrc) && /snapWindowOpen\)&&!isCaller/.test(uiSrc));
+    check('snap banner says any player\'s card can be snapped', /any player/.test(uiSrc) && /ANY player/.test(uiSrc));
+    // Host broadcasts must build each guest's view for their SEAT id, not
+    // the raw connection id — otherwise filteredView finds no player and
+    // every card renders unseen for guests (no gold dots on peeked cards).
+    check('broadcastViews builds guest views for the seat id', /function broadcastViews/.test(uiSrc) && /filteredView\(fullState, \(c\.gameId\|\|cid\)\)/.test(uiSrc));
     check('Snap banner has an ✕ that dismisses tips for this game only', /id="snapBannerX"/.test(html) && /snapTipsDismissed=true/.test(uiSrc) && /snapTipsDismissed=false/.test(uiSrc) && /!snapTipsDismissed/.test(uiSrc));
   }
 }

@@ -158,6 +158,59 @@ function scheck(name, cond, extra) {
     if (a) break; // any non-snap, non-null action is also wrong here (not its turn)
   }
   scheck('bot never snaps blind (no known matching card)', !snapped);
+  // Cross-player bot snaps (owner change, Nov 21): bots snap only cards
+  // they KNOW match — their own (worth 0+, or last card) or an
+  // opponent's NEGATIVE card (Joker/King) when the opponent holds 2+.
+  {
+    const mkSnapGame = (seed, topRank) => {
+      const st = E.newGame([{ name: 'B0', isBot: true }, { name: 'B1', isBot: true }], seed);
+      for (const p of st.players) {
+        E.applyAction(st, p.id, { type: 'peek', slot: 0 });
+        E.applyAction(st, p.id, { type: 'peek', slot: 1 });
+        E.applyAction(st, p.id, { type: 'peekDone' });
+      }
+      st.discard = [{ id: topRank + '♦', rank: topRank, suit: '♦' }];
+      st.snapWindow = { open: true, topRank };
+      return st;
+    };
+    const C = (rank, suit) => ({ id: rank === 'Joker' ? 'Joker-' + suit : rank + suit, rank, suit });
+    // A: bot does NOT snap its own Joker (negative — removing it would RAISE its total).
+    let st = mkSnapGame(31, 'Joker');
+    st.players[0].cards = [C('Joker', '♥'), C('2', '♠'), C('3', '♥'), C('4', '♦')];
+    st.players[0].known = { 'Joker-♥': true };
+    st.players[1].cards = [C('2', '♣'), C('3', '♦'), C('4', '♠'), C('5', '♣')];
+    scheck('bot never snaps its own negative card (Joker)', E.botSnapChoice(st, 'p0', () => 0) === null);
+    // B: bot DOES snap an opponent's known Joker (raises their total).
+    st = mkSnapGame(32, 'Joker');
+    st.players[0].cards = [C('2', '♠'), C('3', '♥'), C('4', '♦'), C('5', '♣')];
+    st.players[0].known = { 'Joker-♠': true };
+    st.players[1].cards = [C('Joker', '♠'), C('2', '♣'), C('3', '♦'), C('4', '♠')];
+    let a = E.botSnapChoice(st, 'p0', () => 0);
+    scheck('bot snaps an opponent\'s known Joker', a && a.type === 'snap' && a.targetPlayerId === 'p1' && a.slot === 0, 'got ' + JSON.stringify(a));
+    a = E.botChooseAction(st, 'p0', () => 0);
+    scheck('botChooseAction returns the cross-player snap', a && a.type === 'snap' && a.targetPlayerId === 'p1', 'got ' + JSON.stringify(a));
+    a = E.botMaybeSnap(st, 'p0', () => 0);
+    scheck('botMaybeSnap returns the cross-player snap', a && a.type === 'snap' && a.targetPlayerId === 'p1', 'got ' + JSON.stringify(a));
+    // C: bot does NOT snap an opponent's LAST card (would gift the 0-card win).
+    st = mkSnapGame(33, 'Joker');
+    st.players[0].cards = [C('2', '♠'), C('3', '♥'), C('4', '♦'), C('5', '♣')];
+    st.players[0].known = { 'Joker-♠': true };
+    st.players[1].cards = [C('Joker', '♠')];
+    scheck('bot never snaps an opponent\'s last card', E.botSnapChoice(st, 'p0', () => 0) === null);
+    // D: bot does NOT snap an opponent's high card (would lower their total).
+    st = mkSnapGame(34, '9');
+    st.players[0].cards = [C('2', '♠'), C('3', '♥'), C('4', '♦'), C('5', '♣')];
+    st.players[0].known = { '9♠': true };
+    st.players[1].cards = [C('9', '♠'), C('2', '♣'), C('3', '♦'), C('4', '♠')];
+    scheck('bot never snaps an opponent\'s high card', E.botSnapChoice(st, 'p0', () => 0) === null);
+    // E: bot DOES snap its own last card (0 cards wins at once).
+    st = mkSnapGame(35, '9');
+    st.players[0].cards = [C('9', '♠')];
+    st.players[0].known = { '9♠': true };
+    st.players[1].cards = [C('2', '♣'), C('3', '♦'), C('4', '♠'), C('5', '♣')];
+    a = E.botSnapChoice(st, 'p0', () => 0);
+    scheck('bot snaps its own last matching card (instant win)', a && a.type === 'snap' && a.slot === 0 && !a.targetPlayerId, 'got ' + JSON.stringify(a));
+  }
   // ...but snaps when it knows it holds the rank (deterministic rnd=0 beats the 40% roll).
   st4.players[1].cards[0] = { id: '9♠', rank: '9', suit: '♠' };
   st4.players[1].known = { '9♠': true };

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Wellington Online v1.3 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
+<!-- Wellington Online v1.4 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -183,7 +183,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
       <li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down. A small gold dot marks cards you have seen.</li>
       <li><b>Your turn:</b> draw the top card and look at it. Either <b>swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b> face-up. Exactly one discard per turn.</li>
       <li><b>Card effects</b> trigger ONLY on a normal turn discard (the drawn card you discard, or the table card you swap out): <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player's, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at both cards, then <b>choose</b> whether to swap them. Exactly one effect per turn discard. <b>Snapped cards never trigger effects</b> — not even a snapped 5, 6, 7 or 8.</li>
-      <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> from their own table before the next card lands there — and if you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Wrong rank? That card is shown, goes back, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on. <b>Advanced:</b> when setting up a room (or a bot game) you can turn <b>Snap tips</b> off — no banner at the top, just watch the middle yourself. Snapping still works exactly the same.</li>
+      <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player's</b> — before the next card lands there. If you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Snapping someone's <b>last</b> card ends the game at once — they win with 0. The Wellington caller's cards are protected in the final round. Wrong rank? That card is shown, <b>goes back to its owner</b>, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on (so if you had 4 cards, you now have 5). <b>Advanced:</b> when setting up a room (or a bot game) you can turn <b>Snap tips</b> off — no banner at the top, just watch the middle yourself. Snapping still works exactly the same.</li>
       <li><b>WELLINGTON:</b> on your turn, before drawing, hit the big button when you think you're lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game — and nobody may touch the caller's cards during the final round.</li>
       <li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile.</li>
     </ul>
@@ -247,7 +247,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   </div>
 </div>
 
-<footer>Wellington Online v1.3 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
+<footer>Wellington Online v1.4 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
 Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, nothing to sign up for. The host holds the true game state; each player only ever sees their own cards.</footer>
 </div>
 
@@ -553,22 +553,33 @@ function doPeekDone(st, me){
 function doSnap(st, me, action){
   if(st.phase==='peek') return {ok:false, error:'no snap window yet'};
   if(!st.snapWindow.open) return {ok:false, error:'no card in the middle to match'};
+  /* CROSS-PLAYER SNAP (owner change, Nov 21): a snap may take the
+     matching card from ANY player's table — your own or an opponent's.
+     targetPlayerId defaults to the snapper (the old behaviour). */
+  const target=action.targetPlayerId?playerById(st,action.targetPlayerId):me;
+  if(!target) return {ok:false, error:'unknown player'};
+  /* The Wellington caller's cards are protected in the final round —
+     nobody may touch them, not even by a snap. */
+  if(st.wellington.calledBy&&target.id===st.wellington.calledBy) return {ok:false, error:'the Wellington caller\'s cards are protected'};
   const slot=action.slot;
-  if(typeof slot!=='number'||slot<0||slot>=me.cards.length) return {ok:false, error:'no card in that slot'};
-  const card=me.cards[slot];
+  if(typeof slot!=='number'||slot<0||slot>=target.cards.length) return {ok:false, error:'no card in that slot'};
+  const card=target.cards[slot];
   /* PENALTY-LOCK RULE (owner clarification, Nov 21):
      a penalty card cannot be discarded the moment it is drawn. Trying
      to snap it right away is rejected — not counted as a wrong snap,
      no second penalty. It unlocks at the start of the penalised
-     player's next turn (see unlockForPlayer / penaltyTurn). */
+     player's next turn (see unlockForPlayer / penaltyTurn). Locked
+     cards sit face-down and unseen, so nobody may snap anyone's
+     locked card — not even the owner. */
   if(card.locked) return {ok:false, error:'that penalty card cannot be discarded yet — it becomes a normal card from your next turn on'};
   const topRank=st.snapWindow.topRank;
   if(card.rank===topRank){
-    me.cards.splice(slot,1);
-    me.known[card.id]=true;
+    target.cards.splice(slot,1);
+    me.known[card.id]=true; target.known[card.id]=true;
     st.discard.push(card); updateSnapWindow(st);
-    st.log.push(me.name+' SNAPPED their '+ordinal(slot+1)+' card — a '+card.rank+'! ('+me.cards.length+' cards left)');
-    if(me.cards.length===0){ endGame(st, me.name+' snapped their last card and has 0 cards.'); return {ok:true, correct:true, snapped:clone(card), gameOver:true, slot}; }
+    const ownSnap=target.id===me.id;
+    st.log.push(me.name+' SNAPPED '+(ownSnap?'their':target.name+'\'s')+' '+ordinal(slot+1)+' card — a '+card.rank+'! ('+target.name+' has '+target.cards.length+' card'+(target.cards.length===1?'':'s')+' left)');
+    if(target.cards.length===0){ endGame(st, target.name+' has 0 cards after the snap.'); return {ok:true, correct:true, snapped:clone(card), gameOver:true, slot, targetPlayerId:target.id}; }
     /* OWNER CORRECTION #2 (Nov 21, overrides the earlier snap-effect rule):
        SNAPS NEVER TRIGGER EFFECTS. A snapped 5/6/7/8 is an effect-free
        discard only. Only ONE effect happens per normal turn discard —
@@ -578,11 +589,14 @@ function doSnap(st, me, action){
        the snapped rank matches it), so a player holding two of the same
        rank may snap twice in a row, and any player may snap repeatedly
        while they still hold a matching card. */
-    return {ok:true, correct:true, snapped:clone(card), effect:null, slot};
+    return {ok:true, correct:true, snapped:clone(card), effect:null, slot, targetPlayerId:target.id};
   }
-  // Wrong snap: card is shown to everyone, returns to its slot.
+  // Wrong snap: the card is shown to everyone and RETURNS to its owner;
+  // the snapper draws a penalty card (face-down, locked) on top of the
+  // cards they already hold — so a snapper who had 4 cards now has 5.
+  // (Owner change, Nov 21.)
   for(const p of st.players) p.known[card.id]=true;
-  st.log.push(me.name+' tried to snap their '+ordinal(slot+1)+' card (a '+card.rank+') — wrong! It was not a '+topRank+'. Penalty card drawn.');
+  st.log.push(me.name+' tried to snap '+(target.id===me.id?'their':target.name+'\'s')+' '+ordinal(slot+1)+' card (a '+card.rank+') — wrong! It was not a '+topRank+'. The card goes back to '+target.name+'; penalty card drawn.');
   let penalty=null;
   if(ensureDeck(st)){
     penalty=st.deck.pop();
@@ -591,7 +605,7 @@ function doSnap(st, me, action){
   } else {
     st.log.push('No cards left in deck or discard — no penalty card could be drawn.');
   }
-  return {ok:true, correct:false, attempted:clone(card), slot, penaltyCard: penalty? {id:penalty.id} : null};
+  return {ok:true, correct:false, attempted:clone(card), slot, targetPlayerId:target.id, penaltyCard: penalty? {id:penalty.id} : null};
 }
 
 function doEffectStep(st, me, action){
@@ -751,7 +765,12 @@ function legalActions(st, playerId){
     return out;
   }
   if(st.snapWindow.open){
-    me.cards.forEach((c,i)=>{ if(!c.locked) out.push({type:'snap', slot:i}); });
+    // Snap targets: any player's unlocked card (own or opponent's),
+    // except the Wellington caller's (protected in the final round).
+    for(const p of st.players){
+      if(st.wellington.calledBy&&p.id===st.wellington.calledBy) continue;
+      p.cards.forEach((c,i)=>{ if(!c.locked) out.push({type:'snap', slot:i, targetPlayerId:p.id}); });
+    }
   }
   if(st.pendingEffect && st.pendingEffect.by===playerId){
     const eff=st.pendingEffect;
@@ -838,6 +857,51 @@ function estimateTotal(st, playerId){
    Snaps: only when it KNOWS it holds the matching rank, ~40% of chances
    so humans can snap first; after a snap it may snap again in the same
    window if it still holds another known matching card. */
+/* Bot snap choice (cross-player snap, Nov 21): a bot snaps only cards
+   it KNOWS match the top middle rank — its own or an opponent's.
+   - Own card: snap it if it is worth 0 or more (removing it lowers or
+     keeps your total), or if it is your last card (0 cards wins at
+     once). Never snap your own Joker/King — removing a negative card
+     RAISES your total.
+   - Opponent's card: snap it only if it is NEGATIVE (Joker/King) — it
+     raises their total — and only if they hold more than 1 card, so you
+     never gift them the 0-card instant win.
+   Best benefit wins; the 40% roll keeps humans competitive. */
+function botSnapChoice(st, playerId, rnd){
+  if(!st||st.phase==='over'||!st.snapWindow||!st.snapWindow.open) return null;
+  const me=playerById(st,playerId); if(!me) return null;
+  const topRank=st.snapWindow.topRank;
+  const rndFn=rnd||Math.random;
+  let best=null, bestBenefit=-Infinity;
+  const consider=(target, slot, benefit)=>{
+    if(benefit>bestBenefit){ bestBenefit=benefit; best={type:'snap', slot, targetPlayerId:target.id}; }
+  };
+  // Own cards — skipped entirely when this bot IS the Wellington caller:
+  // its own cards are protected in the final round (it may still snap an
+  // opponent's negative card below).
+  if(st.wellington.calledBy!==playerId){
+    me.cards.forEach((c,i)=>{
+      if(c.locked||!me.known[c.id]||c.rank!==topRank) return;
+      const v=cardPoints(c);
+      if(me.cards.length===1) consider(me,i,100); // last card: instant win
+      else if(v>=0) consider(me,i,v);
+    });
+  }
+  for(const p of st.players){
+    if(p.id===playerId) continue;
+    if(st.wellington.calledBy&&p.id===st.wellington.calledBy) continue;
+    if(p.cards.length<=1) continue;
+    p.cards.forEach((c,i)=>{
+      if(c.locked||!me.known[c.id]||c.rank!==topRank) return;
+      const v=cardPoints(c);
+      if(v<0) consider(p,i,-v);
+    });
+  }
+  if(!best) return null;
+  if(rndFn()>=0.4) return null;
+  if(best.targetPlayerId===playerId) delete best.targetPlayerId; // own snap: legacy shape
+  return best;
+}
 function botChooseAction(st, playerId, rnd){
   rnd=rnd||Math.random;
   if(!st||st.phase==='over') return null;
@@ -922,13 +986,12 @@ function botChooseAction(st, playerId, rnd){
     if(best>=0&&drawnVal<bestVal) return {type:'swap', slot:best};
     return {type:'discardDrawn'};
   }
-  // Snap chance: only when the bot KNOWS it holds the matching rank.
-  // May fire repeatedly in one window (multiple snaps). 40% per check
-  // so a human at the table can beat the bot to it.
+  // Snap chance: only when the bot KNOWS a matching card — its own or
+  // an opponent's (see botSnapChoice). 40% per check so a human at the
+  // table can beat the bot to it.
   if(st.snapWindow && st.snapWindow.open){
-    const topRank=st.snapWindow.topRank;
-    const matching=me.cards.map((c,i)=>i).filter(i=>{ const c=me.cards[i]; return !c.locked&&me.known[c.id]&&c.rank===topRank; });
-    if(matching.length && rnd()<0.4) return {type:'snap', slot:matching[0]};
+    const snap=botSnapChoice(st, playerId, rnd);
+    if(snap) return snap;
     if(!isMyTurn) return null;
   } else if(!isMyTurn) return null;
   if(isMyTurn && (st.phase==='play'||st.phase==='final')){
@@ -940,13 +1003,7 @@ function botChooseAction(st, playerId, rnd){
   return null;
 }
 function botMaybeSnap(st, playerId, rnd){
-  if(!st||st.phase==='over'||!st.snapWindow||!st.snapWindow.open) return null;
-  const me=playerById(st,playerId); if(!me) return null;
-  const topRank=st.snapWindow.topRank;
-  const matching=me.cards.map((c,i)=>i).filter(i=>{ const c=me.cards[i]; return !c.locked&&me.known[c.id]&&c.rank===topRank; });
-  if(!matching.length) return null;
-  if((rnd||Math.random)()>=0.4) return null;
-  return {type:'snap', slot:matching[0]};
+  return botSnapChoice(st, playerId, rnd);
 }
 /* ---- public rooms directory ($0, PeerJS-only, no server, no database) ----
    There is no matchmaking server. Public rooms are listed through a small
@@ -984,7 +1041,7 @@ function canJoinRoom(roomInfo, currentCount){
   if(currentCount>=roomInfo.maxPlayers) return {ok:false, error:'room is full ('+roomInfo.players+'/'+roomInfo.maxPlayers+' players, bots included)'};
   return {ok:true};
 }
-if(typeof module!=='undefined'&&module.exports){ module.exports={CARD_POINTS,RANKS,SUITS,EFFECT_RANKS,EST_UNKNOWN,mulberry32,randomSeed,shuffle,cardPoints,scoreOf,ordinal,buildDeck,makeCardId,newGame,createGameState,currentPlayer,playerById,applyAction,legalActions,filteredView,stateFingerprint,serializeState,deserializeState,estimateTotal,botChooseAction,botMaybeSnap,effectKindForRank,topDiscard,DIRECTORY_SLOTS,directoryPeerId,createRoomInfo,canJoinRoom}; }
+if(typeof module!=='undefined'&&module.exports){ module.exports={CARD_POINTS,RANKS,SUITS,EFFECT_RANKS,EST_UNKNOWN,mulberry32,randomSeed,shuffle,cardPoints,scoreOf,ordinal,buildDeck,makeCardId,newGame,createGameState,currentPlayer,playerById,applyAction,legalActions,filteredView,stateFingerprint,serializeState,deserializeState,estimateTotal,botChooseAction,botMaybeSnap,botSnapChoice,effectKindForRank,topDiscard,DIRECTORY_SLOTS,directoryPeerId,createRoomInfo,canJoinRoom}; }
 </script>
 <script>
 "use strict";
@@ -1119,7 +1176,7 @@ function rulesHtml(){
   '<li><b>Your turn:</b> draw the top card, look at it. <b>Swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b>. One discard per turn.</li>'+
   '<li><b>Effects — ONLY on a normal turn discard</b> (drawn card discarded, or swapped-out table card). Exactly one effect per turn discard: <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player\'s, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at BOTH cards, then <b>choose</b> whether to swap them (Swap / Keep as they are). The effect must resolve before the turn passes.</li>'+
   '<li><b>Snaps NEVER trigger effects.</b> A snapped 5, 6, 7 or 8 is an effect-free discard — no peek, no swap.</li>'+
-  '<li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> before the next card lands there. Holding two of that rank? Snap <b>twice in a row</b> in the same window. Click one of your own cards while the SNAP banner is showing to try. <b>Advanced:</b> the room setup can turn <b>Snap tips</b> off — no banner, just watch the middle yourself.</li>'+
+  '<li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player\'s</b> — before the next card lands there. Holding two of that rank? Snap <b>twice in a row</b> in the same window. Click a card (yours or anyone else\'s) while the SNAP banner is showing to try. Wrong rank? The card is shown, goes back to its owner, and you draw a <b>penalty card</b> (so 4 cards become 5). <b>Advanced:</b> the room setup can turn <b>Snap tips</b> off — no banner, just watch the middle yourself.</li>'+
   '<li><b>Wrong snap:</b> the card is shown, goes back to its slot, and you must take a <b>penalty card</b> (extra face-down card). You <b>cannot discard it right away</b> — not by snapping it, not by swapping it out, not by a 7/8 swap. From your <b>next turn on</b> it is a normal card: swap it out or snap it like any other.</li>'+
   '<li><b>WELLINGTON:</b> on your turn, <b>before drawing</b>, hit the big button when you think you\'re lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game. During the final round <b>nobody may touch the caller\'s cards</b> (no 6/7/8 on them) — but 5/6/7/8 may still be used on other players.</li>'+
   '<li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile. If deck and discard are both exhausted, the game ends and cards are revealed.</li>'+
@@ -1157,7 +1214,11 @@ function broadcastViews(){
   refreshView(); render();
   for(const cid of Object.keys(conns)){
     const c=conns[cid];
-    if(c&&c.open){ try{ const v=filteredView(fullState, cid); if(lastAnim) v.anim=lastAnim; c.send({t:'view', view:v, hash:stateFingerprint(fullState)}); }catch(e){} }
+    // NB: the view must be built for the guest's SEAT id (stored on the
+    // connection at game start), not the raw connection id — with the
+    // connection id, filteredView finds no player and every card renders
+    // unseen (no gold dots on cards the guest has peeked at).
+    if(c&&c.open){ try{ const v=filteredView(fullState, (c.gameId||cid)); if(lastAnim) v.anim=lastAnim; c.send({t:'view', view:v, hash:stateFingerprint(fullState)}); }catch(e){} }
   }
 }
 function sendToHost(obj){ try{ if(conn&&conn.open) conn.send(obj); }catch(e){} }
@@ -1187,10 +1248,10 @@ function closeReveal(){
   show('revealModal',false);
   render();
 }
-function showReveal(card, other, targets){
+function showReveal(card, other, targets, title){
   if(!card) return;
   transientReveals=targets||[];
-  $('revealTitle').textContent='You peeked';
+  $('revealTitle').textContent=title||'You peeked';
   $('revealText').innerHTML= other
     ? 'Your card: <b>'+esc(cardLabel(card))+'</b> ('+cardPointsLabel(card)+' pts)<br>Their card: <b>'+esc(cardLabel(other))+'</b> ('+cardPointsLabel(other)+' pts)'
     : '<b style="font-size:26px">'+esc(cardLabel(card))+'</b> — '+cardPointsLabel(card)+' pts';
@@ -1236,7 +1297,9 @@ function handleActionResult(res){
     return;
   }
   if(res.attempted){
-    showReveal(res.attempted, null, [{playerId:myId, slot:res.slot, card:res.attempted}]);
+    // Wrong snap: the attempted card belongs to its owner (own or
+    // opponent's) — reveal it on THAT seat, not the snapper's.
+    showReveal(res.attempted, null, [{playerId:res.targetPlayerId||myId, slot:res.slot, card:res.attempted}], 'Wrong snap!');
     return;
   }
 }
@@ -1286,11 +1349,15 @@ function render(){
   const banner=$('snapBanner');
   if(snapOpen){
     banner.classList.remove('hidden');
-    $('snapBannerText').textContent='⚡ SNAP! Top of the middle is '+view.snapWindow.topRank+' — click one of YOUR cards if you hold a '+view.snapWindow.topRank+' (you may snap more than once in this window). Snaps never trigger effects.';
+    $('snapBannerText').textContent='⚡ SNAP! Top of the middle is '+view.snapWindow.topRank+' — click a matching card (yours or ANY player\'s) if you know one is a '+view.snapWindow.topRank+' (you may snap more than once in this window). Snaps never trigger effects.';
   } else banner.classList.add('hidden');
   // opponents
   const oppBox=$('opponentsBox'); oppBox.innerHTML='';
   const peff=view.pendingEffect;
+  // A snap may take a matching card from ANY player's table, so during
+  // the snap window every unlocked, unprotected card is a pickable
+  // target (the Wellington caller's cards never are).
+  const snapWindowOpen=!!(view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over');
   // During my effect's opponent-pick step, opponent cards are the valid
   // targets (dashed gold); the Wellington caller's cards never are.
   const targetStep=!!(peff&&peff.by===myId&&!peff.awaitingDecision&&((peff.kind==='peekOther')||((peff.kind==='swapBlind'||peff.kind==='swapSeen')&&peff.hasOwn)));
@@ -1300,7 +1367,7 @@ function render(){
     const isCaller=view.wellington.calledBy===p.id;
     d.className='seat'+(active?' active':'')+(isCaller?' caller':'');
     d.innerHTML='<div class="sname">'+esc(p.name)+(p.isBot?' 🤖':'')+' <span class="tag2">'+(isCaller?'🏆 called WELLINGTON — protected':(active?'• to move':''))+' • '+p.cards.length+' card'+(p.cards.length===1?'':'s')+'</span></div>'+
-      '<div class="scards" data-pid="'+p.id+'">'+p.cards.map((c,i)=>'<span data-pid="'+p.id+'" data-slot="'+i+'"'+((targetStep&&!isCaller)?' class="pickable"':'')+'>'+miniCardHtml(c, transientCardFor(p.id,i))+'</span>').join('')+'</div>';
+      '<div class="scards" data-pid="'+p.id+'">'+p.cards.map((c,i)=>'<span data-pid="'+p.id+'" data-slot="'+i+'"'+(((targetStep||snapWindowOpen)&&!isCaller)?' class="pickable"':'')+'>'+miniCardHtml(c, transientCardFor(p.id,i))+'</span>').join('')+'</div>';
     oppBox.appendChild(d);
   });
   // bind opponent card clicks (effect targets)
@@ -1325,7 +1392,7 @@ function render(){
   const myCards=$('myCards');
   me.cards.forEach((c,i)=>{
     const holder=document.createElement('span');
-    holder.innerHTML=cardHtml(c, myPickStep?'pickable':'', '', transientCardFor(myId,i));
+    holder.innerHTML=cardHtml(c, (myPickStep||(snapWindowOpen&&!(peff&&peff.by===myId)))?'pickable':'', '', transientCardFor(myId,i));
     const el=holder.firstChild;
     el.addEventListener('click',()=>onMyCard(i));
     myCards.appendChild(el);
@@ -1425,7 +1492,7 @@ function onMyCard(slot){
   if(view.snapWindow&&view.snapWindow.open){
     submitAction({type:'snap', slot}); return;
   }
-  toast(view.turnPlayerId===myId?'Draw a card first (click the draw pile).':'Not your turn — wait, or snap if you hold the matching rank.');
+  toast(view.turnPlayerId===myId?'Draw a card first (click the draw pile).':'Not your turn — wait, or snap a matching card from any player\'s table.');
 }
 function onOpponentCard(pid, slot){
   if(!view) return;
@@ -1434,6 +1501,12 @@ function onOpponentCard(pid, slot){
     if(eff.kind==='peekOther'){ submitAction({type:'effectPeekOther', targetPlayerId:pid, slot}); return; }
     if((eff.kind==='swapBlind'||eff.kind==='swapSeen')&&eff.hasOwn){ submitAction({type:'effectSwapOther', targetPlayerId:pid, slot}); return; }
     if(eff.kind==='swapBlind'||eff.kind==='swapSeen'){ toast('Pick one of YOUR cards first.'); return; }
+  }
+  // Snap window: a snap may take the matching card from ANY player's
+  // table — click an opponent's card to try it. Wrong? It goes back to
+  // them and you draw a penalty card.
+  if(view.snapWindow&&view.snapWindow.open){
+    submitAction({type:'snap', targetPlayerId:pid, slot}); return;
   }
 }
 $('drawPile').addEventListener('click',()=>{
@@ -1529,7 +1602,7 @@ function animForAction(action, res, actorId){
     case 'draw': return Object.assign(base,{kind:'draw'});
     case 'discardDrawn': return Object.assign(base,{kind:'discard'});
     case 'swap': return Object.assign(base,{kind:'swap', slots:[{playerId:actorId, slot:action.slot}]});
-    case 'snap': return Object.assign(base,{kind:res&&res.correct?'snap':'wrongsnap', slots:[{playerId:actorId, slot:action.slot}]});
+    case 'snap': return Object.assign(base,{kind:res&&res.correct?'snap':'wrongsnap', slots:[{playerId:action.targetPlayerId||actorId, slot:action.slot}]});
     case 'peek': return Object.assign(base,{kind:'look', slots:[{playerId:actorId, slot:action.slot}]});
     case 'effectPeekOwn': return Object.assign(base,{kind:'look', slots:[{playerId:actorId, slot:action.slot}]});
     case 'effectPeekOther': return Object.assign(base,{kind:'look', slots:[{playerId:action.targetPlayerId, slot:action.slot}]});
