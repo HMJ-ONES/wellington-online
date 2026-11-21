@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<!-- Wellington Online v1.0 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Wellington Online — Lowest Score Wins</title>
+<meta name="description" content="Wellington Online: a free browser card game for 2-6 players. Peek two cards, swap blind, snap the matching rank, call WELLINGTON when you're lowest. No sign-up, no cost.">
+<style>
+:root{--bg:#0b1f14;--felt:#14532d;--felt2:#166534;--panel:#101c14;--panel2:#16281c;--line:#2a4a35;--txt:#eef6ee;--mut:#a8bfae;--gold:#f2c14e;--green:#58b368;--red:#e5484d;--blue:#4c9aff}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100%}
+body{padding:0 0 40px}
+a{color:var(--gold)}
+.wrap{max-width:1060px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:8px 0 4px}
+.logo{font-size:30px;font-weight:900;letter-spacing:.5px}
+.logo span{color:var(--gold)}
+.tag{color:var(--mut);font-size:13px;margin-top:2px}
+.badge{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--mut);white-space:nowrap}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+h2{font-size:19px;margin-bottom:6px}
+p{color:var(--mut);font-size:14px;line-height:1.5}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+input[type=text]{background:#0c0e12;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px 12px;font-size:16px;min-width:0}
+input[type=text]:focus{outline:2px solid var(--gold);outline-offset:1px}
+button{font-family:inherit;font-size:15px;font-weight:700;border:0;border-radius:10px;padding:12px 16px;cursor:pointer;color:#111;background:var(--gold)}
+button:hover{filter:brightness(1.07)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+button.danger{background:#3a1d1f;color:#ffb3b5;border:1px solid #5b2a2d}
+button.small{padding:8px 11px;font-size:13px}
+.btn-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:14px}
+.btn-grid button{width:100%}
+.hidden{display:none!important}
+.rules{margin-top:14px;font-size:13.5px}
+.rules li{margin:6px 0 6px 18px;color:var(--mut);line-height:1.5}
+.rules li b{color:var(--txt)}
+table.points{border-collapse:collapse;margin:8px 0;font-size:14px}
+table.points td,table.points th{border:1px solid var(--line);padding:6px 10px;text-align:left}
+table.points th{color:var(--gold)}
+/* table */
+.table-wrap{background:radial-gradient(ellipse at center,var(--felt2) 0%,var(--felt) 55%,#0d3b1e 100%);border:3px solid #5b3a1e;border-radius:20px;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.seats{display:grid;grid-template-columns:1fr;gap:10px}
+.seat{background:rgba(0,0,0,.25);border:2px solid transparent;border-radius:12px;padding:8px 10px}
+.seat.active{border-color:var(--gold);box-shadow:0 0 0 2px rgba(242,193,78,.3)}
+.seat.caller{border-color:var(--red)}
+.seat .sname{font-weight:800;font-size:14px}
+.seat .sname .tag2{font-weight:500;color:var(--mut);font-size:12px}
+.seat .scards{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.mini-row{display:flex;gap:8px;flex-wrap:wrap}
+.mini-card{width:34px;height:48px;border-radius:6px;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:13px;line-height:1;border:1px solid #999}
+.mini-card.red{color:#c81e1e}
+.mini-card.back{background:repeating-linear-gradient(45deg,#7f1d1d,#7f1d1d 6px,#991b1b 6px,#991b1b 12px);color:#fff;border-color:#450a0a}
+.mini-card.sel{outline:3px solid var(--gold)}
+.mini-card.locked{outline:2px dashed var(--gold)}
+.card-big{width:64px;height:92px;border-radius:10px;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:22px;line-height:1.1;border:2px solid #999;cursor:pointer;user-select:none}
+.card-big.red{color:#c81e1e}
+.card-big.back{background:repeating-linear-gradient(45deg,#7f1d1d,#7f1d1d 8px,#991b1b 8px,#991b1b 16px);color:#fff;border-color:#450a0a}
+.card-big.sel{outline:4px solid var(--gold)}
+.card-big.locked{outline:3px dashed var(--gold)}
+.card-big .suit{font-size:20px}
+.card-big .pts{font-size:11px;font-weight:700;color:#555}
+.card-big.back .pts{color:#fecaca}
+.center-row{display:flex;gap:18px;justify-content:center;align-items:flex-start;flex-wrap:wrap;margin:14px 0}
+.pile{text-align:center}
+.pile .lbl{font-size:12px;color:#d1fae5;font-weight:700;margin-top:6px}
+.pile .count{font-size:12px;color:var(--mut)}
+.status{font-size:16px;font-weight:800;padding:12px 14px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);margin-bottom:12px;line-height:1.4}
+.status small{display:block;font-weight:500;color:var(--mut);font-size:13px;margin-top:3px}
+.snap-banner{background:#fef08a;color:#422006;font-weight:900;border-radius:10px;padding:10px 12px;margin-bottom:12px;text-align:center;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
+.log{max-height:180px;overflow:auto;font-size:13.5px;line-height:1.7;color:var(--mut)}
+.log b{color:var(--txt)}
+.wellington-btn{width:100%;font-size:22px;padding:16px;background:linear-gradient(180deg,#fde68a,#f59e0b);color:#422006;border:3px solid #92400e;border-radius:14px;letter-spacing:.05em}
+.wellington-btn:disabled{background:#374151;color:#9ca3af;border-color:#1f2937}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:520px;width:100%;max-height:88vh;overflow:auto}
+.modal .box h2{font-size:22px}
+.bot-pick{display:flex;gap:10px;justify-content:center;margin:16px 0;flex-wrap:wrap}
+.bot-pick button{font-size:28px;padding:12px 18px;background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+.lobby-player{display:flex;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--line);font-size:15px}
+.end-card{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
+.end-card.winner{border-color:var(--gold);background:rgba(242,193,78,.08)}
+footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-height:1.6}
+</style>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><div class="logo">🃏 WELLINGTON <span>ONLINE</span></div><div class="tag">Lowest score wins. Peek two. Swap blind. Snap the match. Call it when you're lowest.</div></div>
+  <div class="badge">FREE &nbsp;•&nbsp; NO SIGN-UP &nbsp;•&nbsp; 2–6 PLAYERS &nbsp;•&nbsp; PC + MOBILE</div>
+</header>
+
+<!-- ============ MENU ============ -->
+<div id="menuScreen">
+  <div class="card">
+    <h2>Play Wellington</h2>
+    <p>Each player gets 4 face-down cards. Peek at 2 of your own, then take turns drawing and swapping — blind. Lowest total when the game ends wins.</p>
+    <div class="row">
+      <label for="nameInput" style="color:var(--mut);font-size:14px">Your name</label>
+      <input type="text" id="nameInput" placeholder="e.g. Henrique" maxlength="20" style="flex:1;min-width:140px">
+      <button id="btnRules" type="button" class="ghost small">📖 Rules &amp; points</button>
+    </div>
+    <div class="btn-grid">
+      <button id="btnCreate" type="button">➕ Create lobby<br><small style="font-weight:500;font-size:12px">get a code, invite up to 5 friends / bots</small></button>
+      <button id="btnBots" type="button" class="ghost">🤖 Play vs bots<br><small style="font-weight:500;font-size:12px">solo, right now — pick 1–5 bots</small></button>
+    </div>
+    <div class="row">
+      <input type="text" id="joinCode" placeholder="Lobby code — e.g. KQ7B" maxlength="8" style="flex:1;text-transform:uppercase">
+      <button id="btnJoin" type="button" class="ghost">Join lobby →</button>
+    </div>
+    <p id="menuMsg" style="margin-top:10px;min-height:20px"></p>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h2>🌍 Public rooms</h2>
+    <p>Open lobbies anyone can join. <b>Tap a room to join it</b> — there is no automatic matchmaking; you always choose the room yourself. The list is kept by the room hosts themselves (no server), so it only shows lobbies whose host is online right now. Rooms disappear from the list once their game starts.</p>
+    <div class="row">
+      <button id="btnBrowseRooms" type="button" class="ghost">Browse public rooms</button>
+      <button id="btnRefreshRooms" type="button" class="ghost small">↻ Refresh</button>
+    </div>
+    <p id="roomsMsg" style="margin-top:10px;min-height:20px;color:var(--mut);font-size:14px">Press “Browse public rooms” to see open lobbies — or join a private lobby with its code above.</p>
+    <div id="roomsList" style="margin-top:8px"></div>
+  </div>
+  <div class="card rules" style="margin-top:14px">
+    <h2>How Wellington works</h2>
+    <ul>
+      <li><b>Goal: lowest score wins.</b> Numbered cards are worth <b>10</b>, Jack &amp; Queen <b>11</b>, Joker <b>0</b>, King <b>−1</b>, Ace <b>−2</b>. (Points are editable — see Rules.)</li>
+      <li><b>Start:</b> everyone gets 4 cards face-down. Peek at any <b>2 of your own</b> once, then put them back.</li>
+      <li><b>Your turn:</b> draw the top card and look at it. Either <b>swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b> face-up. Exactly one discard per turn.</li>
+      <li><b>Card effects</b> trigger ONLY on a normal turn discard (the drawn card you discard, or the table card you swap out): <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player's, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> swap after looking at both. Exactly one effect per turn discard. <b>Snapped cards never trigger effects</b> — not even a snapped 5, 6, 7 or 8.</li>
+      <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> from their own table before the next card lands there — and if you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Wrong rank? That card is shown, goes back, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on.</li>
+      <li><b>WELLINGTON:</b> on your turn, before drawing, hit the big button when you think you're lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game — and nobody may touch the caller's cards during the final round.</li>
+      <li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ LOBBY ============ -->
+<div id="lobbyScreen" class="hidden">
+  <div class="card">
+    <h2>Lobby <span id="lobbyCode" class="roomcode" style="font-size:22px;font-weight:900;letter-spacing:.2em;color:var(--gold)"></span></h2>
+    <p id="lobbyMsg">Share the code with your friends — they type it in Join lobby.</p>
+    <div class="row"><button id="btnCopyLobby" type="button" class="ghost small">Copy code / link</button>
+    <button id="btnLeaveLobby" type="button" class="danger small">Leave lobby</button></div>
+    <div id="lobbyList" style="margin-top:12px"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="btnStartGame" type="button" class="hidden">▶ Start game</button>
+      <span id="lobbyWait" style="color:var(--mut);font-size:14px">Waiting for the host to start…</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ GAME ============ -->
+<div id="gameScreen" class="hidden">
+  <div class="status" id="statusBox">Waiting…<small id="statusSub"></small></div>
+  <div id="snapBanner" class="snap-banner hidden"></div>
+  <div class="table-wrap">
+    <div class="seats" id="opponentsBox"></div>
+    <div class="center-row">
+      <div class="pile"><div class="card-big back" id="drawPile" title="Draw pile"><span style="font-size:26px">🂠</span><span class="pts" id="deckCount"></span></div><div class="lbl">Draw pile</div><div class="count">click to draw (your turn)</div></div>
+      <div class="pile"><div class="card-big" id="discardPile"><span style="font-size:26px">—</span></div><div class="lbl">Middle (discard)</div><div class="count" id="discardCount"></div></div>
+    </div>
+    <div id="mySeat"></div>
+    <div id="drawnBox" class="hidden" style="text-align:center;margin-top:10px">
+      <div style="font-weight:800;margin-bottom:6px">You drew:</div>
+      <div style="display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap">
+        <div class="card-big" id="drawnCard"></div>
+        <button id="btnDiscardDrawn" type="button">Discard it</button>
+        <span style="color:var(--mut);font-size:13px">or click one of your table cards below to swap it in blind</span>
+      </div>
+    </div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <button id="btnWellington" type="button" class="wellington-btn" disabled>🏆 WELLINGTON</button>
+  </div>
+  <p id="effectPrompt" style="margin-top:10px;font-weight:700;min-height:20px"></p>
+  <div class="row">
+    <button id="btnPeekDone" type="button" class="ghost small hidden">Done peeking — start game</button>
+    <button id="btnEffectSkip" type="button" class="ghost small hidden">Skip effect</button>
+    <button id="btnMenu2" type="button" class="ghost small">← Menu</button>
+    <button id="btnRules2" type="button" class="ghost small">📖 Rules</button>
+  </div>
+  <div class="card" style="margin-top:12px;padding:14px">
+    <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin-bottom:6px">Room</h3>
+    <div id="connBox" style="font-size:13px;color:var(--mut)">Local game</div>
+    <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:14px 0 6px">Log</h3>
+    <div class="log" id="logBox">Game started.</div>
+  </div>
+</div>
+
+<footer>Wellington Online v1.0 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
+Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, nothing to sign up for. The host holds the true game state; each player only ever sees their own cards.</footer>
+</div>
+
+<div id="botModal" class="modal hidden"><div class="box">
+  <h2 id="botModalTitle">How many bots?</h2><p id="botModalSub">Bots fill the remaining seats (max 6 players total).</p>
+  <div class="bot-pick" id="botPick"></div>
+  <div class="row" style="justify-content:center"><button id="botCancel" type="button" class="ghost">Cancel</button></div>
+</div></div>
+
+<div id="roomOptModal" class="modal hidden"><div class="box">
+  <h2>Lobby settings</h2>
+  <p>Who can find this lobby?</p>
+  <div class="bot-pick" id="visPick">
+    <button type="button" data-vis="private">🔒 Private</button>
+    <button type="button" data-vis="public">🌍 Public</button>
+  </div>
+  <p>Maximum players (2–6, bots included):</p>
+  <div class="bot-pick" id="maxPick"></div>
+  <p id="roomOptMsg" style="min-height:20px;color:var(--mut);font-size:14px"></p>
+  <p style="font-size:13px">Public rooms appear in “Browse public rooms” while they wait for players, and leave the list when the game starts. Private rooms are code-only.</p>
+  <div class="row" style="justify-content:center">
+    <button id="roomOptCreate" type="button">Create lobby</button>
+    <button id="roomOptCancel" type="button" class="ghost">Cancel</button>
+  </div>
+</div></div>
+
+<div id="rulesModal" class="modal hidden"><div class="box">
+  <h2>📖 Wellington — rules &amp; points</h2>
+  <div id="rulesBody" style="font-size:14px;line-height:1.6;color:var(--mut)"></div>
+  <div class="row" style="justify-content:center;margin-top:14px"><button id="rulesClose" type="button">Got it</button></div>
+</div></div>
+
+<div id="revealModal" class="modal hidden"><div class="box">
+  <h2 id="revealTitle">You peeked</h2><p id="revealText" style="text-align:center;font-size:18px;margin:10px 0"></p>
+  <div class="row" style="justify-content:center"><button id="revealClose" type="button">Put it back</button></div>
+</div></div>
+
+<div id="overModal" class="modal hidden"><div class="box">
+  <h2 id="overTitle">🏆 Winner</h2>
+  <div id="overBody"></div>
+  <div class="row" style="justify-content:center;margin-top:16px">
+    <button id="btnOverRematch" type="button">🔄 Rematch (same players)</button>
+    <button id="btnOverMenu" type="button" class="ghost">Menu</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   WELLINGTON ONLINE — engine (pure JS, no DOM).
+   Tested in Node: `node test/engine.test.js` extracts this script block.
+   ===================================================================== */
+/* ---- Points: EDIT THESE — owner unsure ----
+   Every numbered card 2-10 = 10, J/Q = 11, Joker = 0, K = -1, A = -2.
+   Change a number here and the Rules table, scoring and bots follow. */
+const CARD_POINTS = {
+  '2': 10, '3': 10, '4': 10, '5': 10, '6': 10, '7': 10, '8': 10, '9': 10, '10': 10,
+  'J': 11, 'Q': 11, 'K': -1, 'A': -2, 'Joker': 0
+};
+const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+const SUITS = ['\u2660','\u2665','\u2666','\u2663'];
+const EFFECT_RANKS = ['5','6','7','8'];
+/* Unknown own/opponent card estimate used by bots (~ deck average). */
+const EST_UNKNOWN = 8;
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function randomSeed(){ if (typeof crypto!=='undefined' && crypto.getRandomValues){ const a=new Uint32Array(1); crypto.getRandomValues(a); return a[0]>>>0; } return (Math.random()*4294967296)>>>0; }
+function shuffle(arr,rng){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); const t=arr[i]; arr[i]=arr[j]; arr[j]=t; } return arr; }
+function cardPoints(card){ if(!card) return 0; const v=CARD_POINTS[card.rank]; return (v===undefined?10:v); }
+function scoreOf(cards){ return (cards||[]).reduce((s,c)=>s+cardPoints(c),0); }
+function buildDeck(){
+  const deck=[];
+  for(const s of SUITS) for(const r of RANKS) deck.push({id:r+s, rank:r, suit:s});
+  deck.push({id:'Joker-red', rank:'Joker', suit:'\u2665'});
+  deck.push({id:'Joker-black', rank:'Joker', suit:'\u2660'});
+  return deck;
+}
+function makeCardId(rank,suit){ return rank==='Joker' ? ('Joker-'+suit) : (rank+suit); }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+function newGame(playerNames, seed, opts){
+  opts=opts||{};
+  const names=(playerNames||[]).map(n=> (typeof n==='string'? {name:n,isBot:false} : {name:n.name||'Player', isBot:!!n.isBot}));
+  if(names.length<2||names.length>6) throw new Error('Wellington needs 2-6 players, got '+names.length);
+  const s=(seed===undefined?randomSeed():seed)>>>0;
+  const rng=mulberry32(s);
+  const deck=shuffle(buildDeck(),rng);
+  const players=names.map((n,i)=>({id:'p'+i, name:n.name, isBot:n.isBot, seat:i,
+    cards:[], peekedSlots:[], peekedCount:0, peekDone:false, known:{}}));
+  for(let r=0;r<4;r++) for(let i=0;i<players.length;i++) players[i].cards.push(deck.pop());
+  const state={ seed:s, players, deck, discard:[], turnIdx:0, turnCount:0,
+    phase:'peek', drawnCard:null, drawnBy:null,
+    snapWindow:{open:false, topRank:null},
+    wellington:{calledBy:null, active:false, remaining:[]},
+    pendingEffect:null, effectQueue:[], log:['Game started — peek at 2 of your own cards, then press Done.'],
+    winners:null, scores:null, overReason:'', version:1 };
+  return state;
+}
+function createGameState(playerNames, seed, opts){ return newGame(playerNames, seed, opts); }
+function currentPlayer(st){ return st.players[st.turnIdx]; }
+function playerById(st,id){ return st.players.find(p=>p.id===id)||null; }
+function playerIndex(st,id){ return st.players.findIndex(p=>p.id===id); }
+function topDiscard(st){ return st.discard.length? st.discard[st.discard.length-1] : null; }
+function updateSnapWindow(st){
+  const t=topDiscard(st);
+  st.snapWindow.open=!!t; st.snapWindow.topRank=t?t.rank:null;
+}
+function reshuffleDiscardIntoDeck(st){
+  if(st.deck.length>0) return true;
+  if(st.discard.length<=1) return false;
+  const top=st.discard.pop();
+  const rng=mulberry32((st.seed ^ (st.turnCount*2654435761) ^ st.discard.length)>>>0);
+  st.deck=shuffle(st.discard.slice(),rng);
+  st.discard=[top];
+  st.log.push('Draw pile ran out — discard pile reshuffled (top card stays).');
+  return st.deck.length>0;
+}
+function ensureDeck(st){ if(st.deck.length>0) return true; return reshuffleDiscardIntoDeck(st); }
+function unlockForPlayer(st, player){
+  for(const c of player.cards){
+    if(c.locked && c.penaltyTurn!==undefined && c.penaltyTurn < st.turnCount){ c.locked=false; delete c.penaltyTurn; }
+  }
+}
+function endGame(st, reason){
+  if(st.phase==='over') return;
+  st.phase='over'; st.overReason=reason||'Game over.';
+  st.drawnCard=null; st.pendingEffect=null; st.effectQueue=[];
+  st.scores=st.players.map(p=>({playerId:p.id, name:p.name,
+    total:scoreOf(p.cards),
+    breakdown:p.cards.map(c=>({rank:c.rank, suit:c.suit, points:cardPoints(c)}))}));
+  let best=Math.min.apply(null, st.scores.map(s=>s.total));
+  st.winners=st.scores.filter(s=>s.total===best).map(s=>s.playerId);
+  st.log.push(st.overReason+' Lowest score wins: '+st.winners.map(id=>playerById(st,id).name).join(', ')+' ('+best+').');
+}
+function advanceTurn(st){
+  if(st.wellington.active){
+    // Remove the player who just finished from the front of the queue.
+    if(st.wellington.remaining.length && st.wellington.remaining[0]===currentPlayer(st).id) st.wellington.remaining.shift();
+    else { const ix=st.wellington.remaining.indexOf(currentPlayer(st).id); if(ix>=0) st.wellington.remaining.splice(ix,1); }
+    if(st.wellington.remaining.length===0){ endGame(st,'Final round complete — Wellington was called by '+playerById(st,st.wellington.calledBy).name+'.'); return; }
+    const nextId=st.wellington.remaining[0];
+    st.turnIdx=playerIndex(st,nextId); st.turnCount++;
+    unlockForPlayer(st, currentPlayer(st));
+    st.phase='final';
+    return;
+  }
+  st.turnIdx=(st.turnIdx+1)%st.players.length; st.turnCount++;
+  unlockForPlayer(st, currentPlayer(st));
+  st.phase='play';
+}
+function effectKindForRank(rank){
+  if(rank==='5') return 'peekOwn';
+  if(rank==='6') return 'peekOther';
+  if(rank==='7') return 'swapBlind';
+  if(rank==='8') return 'swapSeen';
+  return null;
+}
+function queueOrSetEffect(st, eff){
+  if(st.pendingEffect){ st.effectQueue.push(eff); return; }
+  st.pendingEffect=eff; st.phase='effect';
+}
+function triggerEffectIfAny(st, rank, byId, afterEffect, resumePhase){
+  const kind=effectKindForRank(rank);
+  if(!kind) return false;
+  const eff={kind, rank, by:byId, ownSlot:null, targetPlayerId:null, afterEffect, resumePhase:resumePhase||null};
+  queueOrSetEffect(st, eff);
+  return true;
+}
+function resolveEffectDone(st){
+  const done=st.pendingEffect;
+  st.pendingEffect=null;
+  if(st.effectQueue.length>0){ st.pendingEffect=st.effectQueue.shift(); st.phase='effect'; return; }
+  if(done && done.afterEffect==='advanceTurn'){ advanceTurn(st); return; }
+  // Snap effect: resume whatever phase was interrupted.
+  st.phase=done&&done.resumePhase ? done.resumePhase : (st.wellington.active?'final':'play');
+}
+
+/* ---- applyAction: the single choke point. UI + network both go here. ---- */
+function applyAction(st, playerId, action){
+  if(!st || !action || typeof action.type!=='string') return {ok:false, error:'bad action'};
+  if(st.phase==='over') return {ok:false, error:'game is over'};
+  const me=playerById(st,playerId);
+  if(!me) return {ok:false, error:'unknown player'};
+  const type=action.type;
+
+  /* Snap is allowed in any non-peek phase while the window is open,
+     even while another player's effect is pending (it does not place
+     a card via the turn flow, and the window only closes on the next
+     discard). It is the one action that does not need the turn. */
+  if(type==='snap') return doSnap(st, me, action);
+
+  /* While an effect is pending, only the effect owner may act
+     (effect steps / skip) — everyone else must wait, except snapping. */
+  if(st.pendingEffect){
+    if(type==='effectSkip' || type==='effectPeekOwn' || type==='effectPeekOther' ||
+       type==='effectSwapOwn' || type==='effectSwapOther' || type==='effectSwap'){
+      if(playerId!==st.pendingEffect.by) return {ok:false, error:'another player must resolve their card effect first'};
+      return doEffectStep(st, me, action);
+    }
+    return {ok:false, error:'resolve the pending card effect first'};
+  }
+
+  if(st.phase==='peek'){
+    if(type==='peek') return doPeek(st, me, action);
+    if(type==='peekDone') return doPeekDone(st, me);
+    return {ok:false, error:'peek phase — look at 2 of your own cards first'};
+  }
+  if(st.phase==='play' || st.phase==='final'){
+    if(type==='draw'){
+      if(playerId!==currentPlayer(st).id) return {ok:false, error:'not your turn'};
+      if(!ensureDeck(st)){ endGame(st,'Draw pile and discard pile are both exhausted.'); return {ok:true, gameOver:true}; }
+      const c=st.deck.pop();
+      st.drawnCard=c; st.drawnBy=playerId; me.known[c.id]=true;
+      st.phase='drawn';
+      st.log.push(me.name+' drew a card.');
+      return {ok:true, drawn:clone(c)};
+    }
+    if(type==='wellington'){
+      if(st.phase!=='play') return {ok:false, error:'Wellington was already called'};
+      if(st.wellington.calledBy) return {ok:false, error:'Wellington was already called'};
+      if(playerId!==currentPlayer(st).id) return {ok:false, error:'Wellington can only be called on your own turn, before you draw'};
+      const callerIdx=st.turnIdx;
+      const remaining=[];
+      for(let i=1;i<st.players.length;i++) remaining.push(st.players[(callerIdx+i)%st.players.length].id);
+      st.wellington.calledBy=playerId; st.wellington.active=true; st.wellington.remaining=remaining;
+      st.log.push(me.name+' called WELLINGTON! Everyone else gets exactly one last turn. Nobody may touch '+me.name+'\'s cards now.');
+      if(remaining.length===0){ endGame(st, me.name+' called Wellington.'); return {ok:true}; }
+      st.turnIdx=playerIndex(st, remaining[0]); st.turnCount++;
+      unlockForPlayer(st, currentPlayer(st));
+      st.phase='final';
+      return {ok:true, wellingtonBy:playerId};
+    }
+    return {ok:false, error:'not a valid action right now'};
+  }
+  if(st.phase==='drawn'){
+    if(playerId!==currentPlayer(st).id) return {ok:false, error:'not your turn'};
+    if(type==='discardDrawn'){
+      const c=st.drawnCard; if(!c) return {ok:false, error:'no drawn card'};
+      st.drawnCard=null; st.drawnBy=null;
+      st.discard.push(c); updateSnapWindow(st);
+      st.log.push(me.name+' discarded '+c.rank+c.suit+'.');
+      const hadEffect=triggerEffectIfAny(st, c.rank, playerId, 'advanceTurn', null);
+      if(!hadEffect) advanceTurn(st);
+      return {ok:true, discarded:clone(c), effect:hadEffect?effectKindForRank(c.rank):null};
+    }
+    if(type==='swap'){
+      const slot=action.slot;
+      if(typeof slot!=='number'||slot<0||slot>=me.cards.length) return {ok:false, error:'no card in that slot'};
+      const out=me.cards[slot];
+      if(out.locked) return {ok:false, error:'that penalty card cannot be swapped out yet — it becomes a normal card from your next turn on'};
+      const c=st.drawnCard; if(!c) return {ok:false, error:'no drawn card'};
+      st.drawnCard=null; st.drawnBy=null;
+      me.cards[slot]=c; me.known[c.id]=true;
+      st.discard.push(out); updateSnapWindow(st);
+      st.log.push(me.name+' swapped a card (blind) and discarded '+out.rank+out.suit+'.');
+      const hadEffect=triggerEffectIfAny(st, out.rank, playerId, 'advanceTurn', null);
+      if(!hadEffect) advanceTurn(st);
+      return {ok:true, swappedOut:clone(out), effect:hadEffect?effectKindForRank(out.rank):null};
+    }
+    return {ok:false, error:'draw a card first, then discard it or swap it in'};
+  }
+  return {ok:false, error:'not a valid action right now'};
+}
+
+function doPeek(st, me, action){
+  if(me.peekedCount>=2) return {ok:false, error:'you may only peek at 2 cards'};
+  const slot=action.slot;
+  if(typeof slot!=='number'||slot<0||slot>=me.cards.length) return {ok:false, error:'no card in that slot'};
+  if(me.peekedSlots.indexOf(slot)>=0) return {ok:false, error:'you already peeked at that card'};
+  me.peekedSlots.push(slot); me.peekedCount++;
+  me.known[me.cards[slot].id]=true;
+  return {ok:true, revealed:clone(me.cards[slot])};
+}
+function doPeekDone(st, me){
+  me.peekDone=true;
+  st.log.push(me.name+' finished peeking.');
+  if(st.players.every(p=>p.peekDone)){
+    st.phase='play'; st.turnIdx=0; st.turnCount=0;
+    unlockForPlayer(st, currentPlayer(st));
+    st.log.push('All players peeked. '+currentPlayer(st).name+' starts.');
+  }
+  return {ok:true};
+}
+
+function doSnap(st, me, action){
+  if(st.phase==='peek') return {ok:false, error:'no snap window yet'};
+  if(!st.snapWindow.open) return {ok:false, error:'no card in the middle to match'};
+  const slot=action.slot;
+  if(typeof slot!=='number'||slot<0||slot>=me.cards.length) return {ok:false, error:'no card in that slot'};
+  const card=me.cards[slot];
+  /* PENALTY-LOCK RULE (owner clarification, Nov 21):
+     a penalty card cannot be discarded the moment it is drawn. Trying
+     to snap it right away is rejected — not counted as a wrong snap,
+     no second penalty. It unlocks at the start of the penalised
+     player's next turn (see unlockForPlayer / penaltyTurn). */
+  if(card.locked) return {ok:false, error:'that penalty card cannot be discarded yet — it becomes a normal card from your next turn on'};
+  const topRank=st.snapWindow.topRank;
+  if(card.rank===topRank){
+    me.cards.splice(slot,1);
+    me.known[card.id]=true;
+    st.discard.push(card); updateSnapWindow(st);
+    st.log.push(me.name+' SNAPPED a '+card.rank+'! ('+me.cards.length+' cards left)');
+    if(me.cards.length===0){ endGame(st, me.name+' snapped their last card and has 0 cards.'); return {ok:true, correct:true, snapped:clone(card), gameOver:true}; }
+    /* OWNER CORRECTION #2 (Nov 21, overrides the earlier snap-effect rule):
+       SNAPS NEVER TRIGGER EFFECTS. A snapped 5/6/7/8 is an effect-free
+       discard only. Only ONE effect happens per normal turn discard —
+       the effect of the card the player whose turn it is places in the
+       middle (drawn card discarded, or swapped-out table card).
+       Multiple snaps: the window stays open (top rank is unchanged when
+       the snapped rank matches it), so a player holding two of the same
+       rank may snap twice in a row, and any player may snap repeatedly
+       while they still hold a matching card. */
+    return {ok:true, correct:true, snapped:clone(card), effect:null};
+  }
+  // Wrong snap: card is shown to everyone, returns to its slot.
+  for(const p of st.players) p.known[card.id]=true;
+  st.log.push(me.name+' tried to snap a '+card.rank+' — wrong! It was not a '+topRank+'. Penalty card drawn.');
+  let penalty=null;
+  if(ensureDeck(st)){
+    penalty=st.deck.pop();
+    penalty.locked=true; penalty.penaltyTurn=st.turnCount;
+    me.cards.push(penalty);
+  } else {
+    st.log.push('No cards left in deck or discard — no penalty card could be drawn.');
+  }
+  return {ok:true, correct:false, attempted:clone(card), penaltyCard: penalty? {id:penalty.id} : null};
+}
+
+function doEffectStep(st, me, action){
+  const eff=st.pendingEffect;
+  const type=action.type;
+  if(type==='effectSkip'){
+    st.log.push(me.name+' skipped the '+eff.rank+' effect.');
+    resolveEffectDone(st);
+    return {ok:true, skipped:true};
+  }
+  if(eff.kind==='peekOwn'){
+    if(type!=='effectPeekOwn') return {ok:false, error:'pick one of YOUR cards to peek at'};
+    const slot=action.slot;
+    if(typeof slot!=='number'||slot<0||slot>=me.cards.length) return {ok:false, error:'no card in that slot'};
+    const c=me.cards[slot]; me.known[c.id]=true;
+    st.log.push(me.name+' used the 5 to peek at one of their own cards.');
+    resolveEffectDone(st);
+    return {ok:true, revealed:clone(c)};
+  }
+  if(eff.kind==='peekOther'){
+    if(type!=='effectPeekOther') return {ok:false, error:'pick another player\'s card to peek at'};
+    const target=playerById(st, action.targetPlayerId);
+    if(!target) return {ok:false, error:'unknown player'};
+    if(target.id===me.id) return {ok:false, error:'pick ANOTHER player\'s card'};
+    if(st.wellington.calledBy===target.id) return {ok:false, error:'nobody may touch the Wellington caller\'s cards'};
+    const slot=action.slot;
+    if(typeof slot!=='number'||slot<0||slot>=target.cards.length) return {ok:false, error:'no card in that slot'};
+    const c=target.cards[slot]; me.known[c.id]=true;
+    st.log.push(me.name+' used the 6 to peek at one of '+target.name+'\'s cards.');
+    resolveEffectDone(st);
+    return {ok:true, revealed:clone(c)};
+  }
+  if(eff.kind==='swapBlind' || eff.kind==='swapSeen'){
+    if(type==='effectSwapOwn'){
+      const slot=action.slot;
+      if(typeof slot!=='number'||slot<0||slot>=me.cards.length) return {ok:false, error:'no card in that slot'};
+      if(me.cards[slot].locked) return {ok:false, error:'that penalty card cannot be swapped yet — it becomes a normal card from your next turn on'};
+      eff.ownSlot=slot;
+      if(eff.kind==='swapSeen'){ const c=me.cards[slot]; me.known[c.id]=true; return {ok:true, revealedOwn:clone(c)}; }
+      return {ok:true};
+    }
+    if(type==='effectSwapOther'){
+      if(eff.ownSlot===null||eff.ownSlot===undefined) return {ok:false, error:'pick one of YOUR cards first'};
+      const target=playerById(st, action.targetPlayerId);
+      if(!target) return {ok:false, error:'unknown player'};
+      if(target.id===me.id) return {ok:false, error:'pick ANOTHER player\'s card'};
+      if(st.wellington.calledBy===target.id) return {ok:false, error:'nobody may touch the Wellington caller\'s cards'};
+      const slot=action.slot;
+      if(typeof slot!=='number'||slot<0||slot>=target.cards.length) return {ok:false, error:'no card in that slot'};
+      if(target.cards[slot].locked) return {ok:false, error:'that penalty card cannot be swapped yet'};
+      const ownCard=me.cards[eff.ownSlot], otherCard=target.cards[slot];
+      if(eff.kind==='swapSeen'){ me.known[ownCard.id]=true; me.known[otherCard.id]=true; }
+      me.cards[eff.ownSlot]=otherCard; target.cards[slot]=ownCard;
+      st.log.push(me.name+' used the '+eff.rank+' to swap a card with '+target.name+'.');
+      const revealed = eff.kind==='swapSeen' ? {own:clone(ownCard), other:clone(otherCard)} : null;
+      resolveEffectDone(st);
+      return {ok:true, revealed};
+    }
+    if(type==='effectSwap'){
+      const ownSlot=action.ownSlot, target=playerById(st, action.targetPlayerId), slot=action.targetSlot;
+      if(typeof ownSlot!=='number'||ownSlot<0||ownSlot>=me.cards.length) return {ok:false, error:'no card in that slot'};
+      if(me.cards[ownSlot].locked) return {ok:false, error:'that penalty card cannot be swapped yet'};
+      if(!target) return {ok:false, error:'unknown player'};
+      if(target.id===me.id) return {ok:false, error:'pick ANOTHER player\'s card'};
+      if(st.wellington.calledBy===target.id) return {ok:false, error:'nobody may touch the Wellington caller\'s cards'};
+      if(typeof slot!=='number'||slot<0||slot>=target.cards.length) return {ok:false, error:'no card in that slot'};
+      if(target.cards[slot].locked) return {ok:false, error:'that penalty card cannot be swapped yet'};
+      const ownCard=me.cards[ownSlot], otherCard=target.cards[slot];
+      if(eff.kind==='swapSeen'){ me.known[ownCard.id]=true; me.known[otherCard.id]=true; }
+      me.cards[ownSlot]=otherCard; target.cards[slot]=ownCard;
+      st.log.push(me.name+' used the '+eff.rank+' to swap a card with '+target.name+'.');
+      const revealed = eff.kind==='swapSeen' ? {own:clone(ownCard), other:clone(otherCard)} : null;
+      resolveEffectDone(st);
+      return {ok:true, revealed};
+    }
+    return {ok:false, error:'pick one of YOUR cards first, then an opponent\'s card'};
+  }
+  return {ok:false, error:'unknown effect action'};
+}
+
+/* ---- legalActions: what a player may do right now (UI + tests) ---- */
+function legalActions(st, playerId){
+  const out=[];
+  if(!st||st.phase==='over') return out;
+  const me=playerById(st,playerId); if(!me) return out;
+  if(st.phase==='peek'){
+    me.cards.forEach((c,i)=>{ if(me.peekedSlots.indexOf(i)<0 && me.peekedCount<2) out.push({type:'peek', slot:i}); });
+    out.push({type:'peekDone'});
+    return out;
+  }
+  if(st.snapWindow.open){
+    me.cards.forEach((c,i)=>{ if(!c.locked) out.push({type:'snap', slot:i}); });
+  }
+  if(st.pendingEffect && st.pendingEffect.by===playerId){
+    const eff=st.pendingEffect;
+    out.push({type:'effectSkip'});
+    if(eff.kind==='peekOwn') me.cards.forEach((c,i)=>out.push({type:'effectPeekOwn', slot:i}));
+    if(eff.kind==='peekOther') st.players.filter(p=>p.id!==playerId&&p.id!==st.wellington.calledBy).forEach(p=>p.cards.forEach((c,i)=>out.push({type:'effectPeekOther', targetPlayerId:p.id, slot:i})));
+    if(eff.kind==='swapBlind'||eff.kind==='swapSeen'){
+      if(eff.ownSlot===null||eff.ownSlot===undefined) me.cards.forEach((c,i)=>{ if(!c.locked) out.push({type:'effectSwapOwn', slot:i}); });
+      else st.players.filter(p=>p.id!==playerId&&p.id!==st.wellington.calledBy).forEach(p=>p.cards.forEach((c,i)=>{ if(!c.locked) out.push({type:'effectSwapOther', targetPlayerId:p.id, slot:i}); }));
+    }
+    return out;
+  }
+  if(st.pendingEffect) return out; // someone else's effect: only snaps (already added)
+  const isTurn=currentPlayer(st).id===playerId;
+  if(!isTurn) return out;
+  if(st.phase==='play'||st.phase==='final'){
+    out.push({type:'draw'});
+    if(st.phase==='play'&&!st.wellington.calledBy) out.push({type:'wellington'});
+  } else if(st.phase==='drawn'){
+    out.push({type:'discardDrawn'});
+    me.cards.forEach((c,i)=>{ if(!c.locked) out.push({type:'swap', slot:i}); });
+  }
+  return out;
+}
+
+/* ---- filteredView: per-client view. NEVER leaks hidden card values. ----
+   Own cards show a value only if THIS viewer has seen that card
+   (peek / draw / 5 / 6 / 8 / a shown wrong snap). Opponents' cards show
+   a value only if the viewer has seen that exact card. Everything else
+   is a back (rank/suit null). Discard pile is public. At reveal
+   (phase 'over') every value is shown. The raw `known` map is never sent. */
+function filteredView(st, viewerId){
+  const viewer=playerById(st,viewerId);
+  const over=st.phase==='over';
+  const players=st.players.map(p=>({
+    id:p.id, name:p.name, isBot:p.isBot, seat:p.seat,
+    cardCount:p.cards.length, peekedCount:p.peekedCount, peekDone:p.peekDone,
+    cards:p.cards.map((c,ci)=>{
+      const knownToViewer = over || (viewer && viewer.known[c.id]);
+      // NB: a card's true id IS its rank+suit (e.g. '9♦'), so an unseen
+      // card must get an opaque id — sending the real id would leak it.
+      return {id:knownToViewer?c.id:('hidden-'+p.id+'-'+ci), rank:knownToViewer?c.rank:null, suit:knownToViewer?c.suit:null,
+        locked:!!c.locked, known:!!knownToViewer};
+    })
+  }));
+  let drawn=null;
+  if(st.drawnCard && viewerId===st.drawnBy) drawn=clone(st.drawnCard);
+  return {
+    seed:st.seed, phase:st.phase, turnIdx:st.turnIdx, turnCount:st.turnCount,
+    turnPlayerId:currentPlayer(st).id, players, deckCount:st.deck.length,
+    discard:clone(st.discard),
+    snapWindow:clone(st.snapWindow),
+    drawnCard:drawn, hasDrawn:!!st.drawnCard, drawnBy:st.drawnBy,
+    wellington:clone(st.wellington),
+    pendingEffect: st.pendingEffect ? {kind:st.pendingEffect.kind, rank:st.pendingEffect.rank, by:st.pendingEffect.by, ownSlot:st.pendingEffect.ownSlot, hasOwn:st.pendingEffect.ownSlot!==null&&st.pendingEffect.ownSlot!==undefined} : null,
+    log:st.log.slice(-40), winners:st.winners, scores:st.scores, overReason:st.overReason,
+    version:st.version
+  };
+}
+function stateFingerprint(st){
+  const s=JSON.stringify([st.phase, st.turnIdx, st.turnCount, st.deck.length, st.discard.map(c=>c.id), st.players.map(p=>p.cards.map(c=>c.id)), st.wellington.calledBy, st.scores]);
+  let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h;
+}
+function serializeState(st){ return clone(st); }
+function deserializeState(s){ return clone(s); }
+function estimateTotal(st, playerId){
+  const me=playerById(st,playerId); if(!me) return 0;
+  let total=0, allKnown=true;
+  for(const c of me.cards){ if(me.known[c.id]) total+=cardPoints(c); else { total+=EST_UNKNOWN; allKnown=false; } }
+  return {total, allKnown};
+}
+
+/* ---- bots ----
+   A bot only ever uses what it has SEEN (its `known` map): peeked own
+   cards, its drawn card, 5/6/8 peeks, and cards shown by a wrong snap.
+   Unknown own/opponent slots are estimated at EST_UNKNOWN (~8, the deck
+   average). It never reads an unseen card's value from the full state.
+   Snaps: only when it KNOWS it holds the matching rank, ~40% of chances
+   so humans can snap first; after a snap it may snap again in the same
+   window if it still holds another known matching card. */
+function botChooseAction(st, playerId, rnd){
+  rnd=rnd||Math.random;
+  if(!st||st.phase==='over') return null;
+  const idx=playerIndex(st,playerId); if(idx<0) return null;
+  const me=st.players[idx];
+  if(st.phase==='peek'){
+    if(!me.peekDone){
+      if(me.peekedCount<2){
+        const unpeeked=me.cards.map((c,i)=>i).filter(i=>me.peekedSlots.indexOf(i)<0);
+        if(unpeeked.length) return {type:'peek', slot:unpeeked[Math.floor(rnd()*unpeeked.length)]};
+      }
+      return {type:'peekDone'};
+    }
+    return null;
+  }
+  if(st.pendingEffect && st.pendingEffect.by===playerId){
+    const eff=st.pendingEffect;
+    if(eff.kind==='peekOwn'){
+      const unknown=me.cards.map((c,i)=>i).filter(i=>!me.known[me.cards[i].id]);
+      const pick=unknown.length?unknown[Math.floor(rnd()*unknown.length)]:Math.floor(rnd()*me.cards.length);
+      return {type:'effectPeekOwn', slot:pick};
+    }
+    if(eff.kind==='peekOther'){
+      const opps=st.players.filter(p=>p.id!==playerId&&p.id!==st.wellington.calledBy&&p.cards.length>0);
+      if(!opps.length) return {type:'effectSkip'};
+      const target=opps[Math.floor(rnd()*opps.length)];
+      const unknown=target.cards.map((c,i)=>i).filter(i=>!me.known[target.cards[i].id]);
+      const slot=unknown.length?unknown[Math.floor(rnd()*unknown.length)]:Math.floor(rnd()*target.cards.length);
+      return {type:'effectPeekOther', targetPlayerId:target.id, slot};
+    }
+    if(eff.kind==='swapBlind'||eff.kind==='swapSeen'){
+      if(eff.ownSlot===null||eff.ownSlot===undefined){
+        let best=-1,bestVal=-1;
+        me.cards.forEach((c,i)=>{ if(c.locked) return; const v=me.known[c.id]?cardPoints(c):EST_UNKNOWN; if(v>bestVal){bestVal=v;best=i;} });
+        if(best<0) return {type:'effectSkip'};
+        return {type:'effectSwapOwn', slot:best};
+      }
+      const opps=st.players.filter(p=>p.id!==playerId&&p.id!==st.wellington.calledBy&&p.cards.length>0);
+      if(!opps.length) return {type:'effectSkip'};
+      if(eff.kind==='swapSeen'){
+        const ownCard=me.cards[eff.ownSlot];
+        const ownVal=me.known[ownCard.id]?cardPoints(ownCard):EST_UNKNOWN;
+        let bestTarget=null,bestSlot=-1,bestVal=Infinity;
+        for(const opp of opps) opp.cards.forEach((c,i)=>{
+          if(c.locked) return;
+          if(me.known[c.id]){ const v=cardPoints(c); if(v<ownVal&&v<bestVal){bestVal=v;bestTarget=opp;bestSlot=i;} }
+        });
+        if(bestTarget) return {type:'effectSwapOther', targetPlayerId:bestTarget.id, slot:bestSlot};
+        return {type:'effectSkip'};
+      }
+      const target=opps[Math.floor(rnd()*opps.length)];
+      const unlocked=target.cards.map((c,i)=>i).filter(i=>!target.cards[i].locked);
+      if(!unlocked.length) return {type:'effectSkip'};
+      return {type:'effectSwapOther', targetPlayerId:target.id, slot:unlocked[Math.floor(rnd()*unlocked.length)]};
+    }
+    return {type:'effectSkip'};
+  }
+  const isMyTurn=currentPlayer(st).id===playerId;
+  if(isMyTurn && st.phase==='drawn'){
+    const drawn=st.drawnCard; if(!drawn) return null;
+    const drawnVal=cardPoints(drawn);
+    let best=-1,bestVal=-1;
+    me.cards.forEach((c,i)=>{ if(c.locked) return; const v=me.known[c.id]?cardPoints(c):EST_UNKNOWN; if(v>bestVal){bestVal=v;best=i;} });
+    if(best>=0&&drawnVal<bestVal) return {type:'swap', slot:best};
+    return {type:'discardDrawn'};
+  }
+  // Snap chance: only when the bot KNOWS it holds the matching rank.
+  // May fire repeatedly in one window (multiple snaps). 40% per check
+  // so a human at the table can beat the bot to it.
+  if(st.snapWindow && st.snapWindow.open){
+    const topRank=st.snapWindow.topRank;
+    const matching=me.cards.map((c,i)=>i).filter(i=>{ const c=me.cards[i]; return !c.locked&&me.known[c.id]&&c.rank===topRank; });
+    if(matching.length && rnd()<0.4) return {type:'snap', slot:matching[0]};
+    if(!isMyTurn) return null;
+  } else if(!isMyTurn) return null;
+  if(isMyTurn && (st.phase==='play'||st.phase==='final')){
+    const est=estimateTotal(st,playerId);
+    const shouldCall=est.total<=2||(est.allKnown&&est.total<=5)||(st.turnCount>60&&est.total<=8);
+    if(st.phase==='play'&&!st.wellington.calledBy&&shouldCall) return {type:'wellington'};
+    return {type:'draw'};
+  }
+  return null;
+}
+function botMaybeSnap(st, playerId, rnd){
+  if(!st||st.phase==='over'||!st.snapWindow||!st.snapWindow.open) return null;
+  const me=playerById(st,playerId); if(!me) return null;
+  const topRank=st.snapWindow.topRank;
+  const matching=me.cards.map((c,i)=>i).filter(i=>{ const c=me.cards[i]; return !c.locked&&me.known[c.id]&&c.rank===topRank; });
+  if(!matching.length) return null;
+  if((rnd||Math.random)()>=0.4) return null;
+  return {type:'snap', slot:matching[0]};
+}
+/* ---- public rooms directory ($0, PeerJS-only, no server, no database) ----
+   There is no matchmaking server. Public rooms are listed through a small
+   set of fixed "directory slots": peer IDs wellington-directory-v1-1..10.
+   A public-room host ALSO claims one directory slot (first free one) and
+   answers list queries with its room info. A browser looking for rooms
+   asks every slot and shows the rooms that answer; a slot with no answer
+   is skipped. No automatic matchmaking: joining is always the user's
+   manual tap on a listed room (or entering a code). The host unregisters
+   (releases its slot) when the game starts or the room closes, so the
+   list only ever shows lobbies still waiting for players. */
+const DIRECTORY_SLOTS = 10;
+function directoryPeerId(n){ return 'wellington-directory-v1-'+n; }
+function createRoomInfo(o){
+  o=o||{};
+  let maxPlayers=parseInt(o.maxPlayers,10);
+  if(isNaN(maxPlayers)) maxPlayers=6;
+  maxPlayers=Math.max(2,Math.min(6,maxPlayers));
+  let players=parseInt(o.players,10); if(isNaN(players)||players<0) players=0;
+  let bots=parseInt(o.bots,10); if(isNaN(bots)||bots<0) bots=0;
+  if(players>maxPlayers) players=maxPlayers;
+  if(bots>players) bots=players;
+  return {
+    code:String(o.code||'').trim().toUpperCase(),
+    hostName:String(o.hostName||'Host').slice(0,20),
+    players:players, maxPlayers:maxPlayers, bots:bots,
+    status:(o.status==='playing'?'playing':'waiting')
+  };
+}
+/* Max-players enforcement (bots count toward the total — the host's
+   lobby list already includes them, so currentCount includes them too). */
+function canJoinRoom(roomInfo, currentCount){
+  if(!roomInfo||!roomInfo.code) return {ok:false, error:'unknown room'};
+  if(roomInfo.status!=='waiting') return {ok:false, error:'that game already started'};
+  if(currentCount>=roomInfo.maxPlayers) return {ok:false, error:'room is full ('+roomInfo.players+'/'+roomInfo.maxPlayers+' players, bots included)'};
+  return {ok:true};
+}
+if(typeof module!=='undefined'&&module.exports){ module.exports={CARD_POINTS,RANKS,SUITS,EFFECT_RANKS,EST_UNKNOWN,mulberry32,randomSeed,shuffle,cardPoints,scoreOf,buildDeck,makeCardId,newGame,createGameState,currentPlayer,playerById,applyAction,legalActions,filteredView,stateFingerprint,serializeState,deserializeState,estimateTotal,botChooseAction,botMaybeSnap,effectKindForRank,topDiscard,DIRECTORY_SLOTS,directoryPeerId,createRoomInfo,canJoinRoom}; }
+</script>
+<script>
+"use strict";
+/* ================= UI + multiplayer (PeerJS, host-authoritative) ================= */
+let view=null;            // filtered view of the game (what THIS player may see)
+let fullState=null;       // host / local only: the true state
+let myId=null;            // 'p0'.. in the current game (local/host) or assigned by host
+let myName='Player';
+let playMode='local';     // local | online
+let isHost=false, roomCode=null;
+let peer=null, conns={}, clients={}; // host: conn per client id
+let conn=null;            // guest: conn to host
+let pendingBotNames=[];   // bot names to add when the game starts
+let lobbyPlayers=[];      // {id,name,isBot} in lobby (host view)
+let lobbyBots=0;
+let roomVisibility='private'; // 'private' (code-only) | 'public' (listed)
+let roomMaxPlayers=6;         // 2-6, bots included
+let pendingLobbyBots=0;
+let dirPeer=null, dirSlot=0;  // public-room directory registration (host only)
+let lastAckedN=-1, resendTimer=null, heartbeatTimer=null, helloTimer=null, stateReceived=false;
+let effectStep={ownSlot:null, ownRevealed:null}; // UI-side effect flow
+let selectedSnapSlot=-1;
+let botTimer=null, gameId=0;
+const $=id=>document.getElementById(id);
+function show(id,on){ $(id).classList.toggle('hidden',!on); }
+function setMenuMsg(t){ $('menuMsg').textContent=t||''; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function cardLabel(c){
+  if(!c||!c.rank) return '?';
+  return c.rank==='Joker'?'🃏 Joker':(c.rank+c.suit);
+}
+function cardPointsLabel(c){ if(!c||!c.rank) return ''; return (cardPoints(c)>0?'+':'')+cardPoints(c); }
+function cardHtml(c, cls, extra){
+  const known=!!(c&&c.rank);
+  const red=known&&(c.suit==='\u2665'||c.suit==='\u2666');
+  const locked=c&&c.locked;
+  return '<div class="card-big '+(known?'':'back ')+(red?'red ':'')+(locked?'locked ':'')+(cls||'')+'" '+(extra||'')+'>'+
+    (known?('<span>'+esc(c.rank)+'</span><span class="suit">'+esc(c.suit)+'</span><span class="pts">'+cardPointsLabel(c)+' pts</span>')
+          :'<span style="font-size:26px">🂠</span><span class="pts">'+(locked?'locked':'?')+'</span>')+'</div>';
+}
+function miniCardHtml(c){
+  const known=!!(c&&c.rank);
+  const red=known&&(c.suit==='\u2665'||c.suit==='\u2666');
+  return '<div class="mini-card '+(known?'':'back ')+(red?'red':'')+'">'+(known?('<span>'+esc(c.rank)+'</span><span>'+esc(c.suit)+'</span>'):'?')+'</div>';
+}
+function viewHashOf(v){ let h=5381; const s=JSON.stringify([v.phase,v.turnIdx,v.turnCount,v.deckCount,v.discard.map(c=>c.id),v.players.map(p=>p.cards.map(c=>c.id)),v.wellington.calledBy]); for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h; }
+function pointsTableHtml(){
+  const rows=[['2 – 10','10 each'],['Jack, Queen','11'],['Joker','0'],['King','−1'],['Ace','−2']];
+  return '<table class="points"><tr><th>Card</th><th>Points</th></tr>'+rows.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('')+'</table>'+
+  '<p style="margin-top:8px">Lowest total when the game ends wins. Ties share the win. Points come from the same list the game scores with — if the owner ever changes a value, this table changes with it.</p>';
+}
+function rulesHtml(){
+  return '<p><b>Goal:</b> finish with the <b>lowest</b> total. '+pointsTableHtml()+'</p>'+
+  '<ul style="margin:8px 0 8px 18px">'+
+  '<li><b>Start:</b> 4 cards face-down each. Peek at any <b>2 of your own</b> once, then press Done.</li>'+
+  '<li><b>Your turn:</b> draw the top card, look at it. <b>Swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b>. One discard per turn.</li>'+
+  '<li><b>Effects — ONLY on a normal turn discard</b> (drawn card discarded, or swapped-out table card). Exactly one effect per turn discard: <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player\'s, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> swap after looking at both cards. The effect must resolve before the turn passes.</li>'+
+  '<li><b>Snaps NEVER trigger effects.</b> A snapped 5, 6, 7 or 8 is an effect-free discard — no peek, no swap.</li>'+
+  '<li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> before the next card lands there. Holding two of that rank? Snap <b>twice in a row</b> in the same window. Click one of your own cards while the SNAP banner is showing to try.</li>'+
+  '<li><b>Wrong snap:</b> the card is shown, goes back to its slot, and you must take a <b>penalty card</b> (extra face-down card). You <b>cannot discard it right away</b> — not by snapping it, not by swapping it out, not by a 7/8 swap. From your <b>next turn on</b> it is a normal card: swap it out or snap it like any other.</li>'+
+  '<li><b>WELLINGTON:</b> on your turn, <b>before drawing</b>, hit the big button when you think you\'re lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game. During the final round <b>nobody may touch the caller\'s cards</b> (no 6/7/8 on them) — but 5/6/7/8 may still be used on other players.</li>'+
+  '<li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile. If deck and discard are both exhausted, the game ends and cards are revealed.</li>'+
+  '<li><b>0 cards:</b> snapping your last card ends the game immediately — you score 0.</li>'+
+  '<li><b>Clock:</b> play goes clockwise, seat order.</li></ul>';
+}
+function openRules(){ $('rulesBody').innerHTML=rulesHtml(); show('rulesModal',true); }
+$('btnRules').onclick=openRules; $('btnRules2').onclick=openRules;
+$('rulesClose').onclick=()=>show('rulesModal',false);
+$('revealClose').onclick=()=>show('revealModal',false);
+
+/* ---------- local / host game bootstrap ---------- */
+function botNames(n){ const pool=['Ada','Boris','Cleo','Dante','Esme','Felix']; return pool.slice(0,n).map(x=>x+' (bot)'); }
+function startLocalGame(names, seed){
+  fullState=newGame(names, seed);
+  myId=fullState.players[0].id;
+  playMode='local'; isHost=true;
+  gameId++;
+  show('menuScreen',false); show('lobbyScreen',false); show('gameScreen',true);
+  $('connBox').textContent='Local game vs bots — no network needed.';
+  refreshView(); render(); scheduleBots();
+}
+function refreshView(){
+  if(!fullState) return;
+  view=filteredView(fullState, myId);
+}
+/* Host broadcasts a FRESH filtered view to every client after each action. */
+function broadcastViews(){
+  if(!isHost||!fullState) return;
+  refreshView(); render();
+  for(const cid of Object.keys(conns)){
+    const c=conns[cid];
+    if(c&&c.open){ try{ c.send({t:'view', view:filteredView(fullState, cid), hash:stateFingerprint(fullState)}); }catch(e){} }
+  }
+}
+function sendToHost(obj){ try{ if(conn&&conn.open) conn.send(obj); }catch(e){} }
+function doLocalAction(action){
+  if(!fullState) return null;
+  const res=applyAction(fullState, myId, action);
+  if(res&&res.ok){ afterAction(res, action); }
+  else if(res&&!res.ok){ toast(res.error); }
+  refreshView(); render(); scheduleBots();
+  return res;
+}
+function afterAction(res, action){
+  if(res&&res.revealed) showReveal(res.revealed);
+  if(res&&res.revealedOwn) showReveal(res.revealedOwn, res.revealed?res.revealed.other:null);
+  if(res&&res.drawn) { /* drawn card renders in drawnBox */ }
+  if(fullState&&fullState.phase==='over') showOver();
+}
+function toast(msg){ $('effectPrompt').textContent=msg||''; }
+function showReveal(card, other){
+  if(!card) return;
+  $('revealTitle').textContent='You peeked';
+  $('revealText').innerHTML= other
+    ? 'Your card: <b>'+esc(cardLabel(card))+'</b> ('+cardPointsLabel(card)+' pts)<br>Their card: <b>'+esc(cardLabel(other))+'</b> ('+cardPointsLabel(other)+' pts)'
+    : '<b style="font-size:26px">'+esc(cardLabel(card))+'</b> — '+cardPointsLabel(card)+' pts';
+  show('revealModal',true);
+}
+
+/* ---------- rendering from the filtered view ---------- */
+function render(){
+  if(!view) return;
+  const me=view.players.find(p=>p.id===myId)||view.players[0];
+  const turnP=view.players.find(p=>p.id===view.turnPlayerId);
+  const isMyTurn=view.turnPlayerId===myId;
+  // status
+  let status='';
+  if(view.phase==='over'){
+    const winNames=(view.winners||[]).map(id=>{ const p=view.players.find(x=>x.id===id); return p?p.name:id; });
+    status='🏆 '+(winNames.length>1?'Tie! ':'')+winNames.join(' & ')+' win'+(winNames.length>1?'':'s')+'!';
+  } else if(view.phase==='peek'){
+    status= me.peekDone ? 'Waiting for everyone to finish peeking…' : '👀 Peek phase — click 2 of your own cards to look at them, then press Done.';
+  } else if(view.pendingEffect){
+    const by=view.players.find(p=>p.id===view.pendingEffect.by);
+    status=(view.pendingEffect.by===myId?'Your '+view.pendingEffect.rank+' effect — resolve it below.':(by?by.name:'Someone')+' is resolving a '+view.pendingEffect.rank+' effect…');
+  } else if(view.phase==='final'){
+    status='🏆 WELLINGTON called by '+(view.players.find(p=>p.id===view.wellington.calledBy)||{}).name+' — final round! ';
+    status+= isMyTurn?'Your LAST turn.':(turnP?turnP.name+'\'s last turn.':'');
+  } else if(view.phase==='drawn'){
+    status= isMyTurn?'You drew a card — discard it or swap it in blind (click one of your table cards).':(turnP?turnP.name+' drew a card…':'');
+  } else {
+    status= isMyTurn?'Your turn — draw a card, or call WELLINGTON if you\'re lowest.':(turnP?turnP.name+'\'s turn.':'');
+  }
+  $('statusBox').innerHTML=esc(status)+'<small>'+esc(view.phase==='peek'?'Peek once at the start only.':(view.deckCount+' cards in the draw pile • '+view.discard.length+' in the middle'))+'</small>';
+  // snap banner
+  const snapOpen=view.snapWindow&&view.snapWindow.open&&view.phase!=='peek'&&view.phase!=='over';
+  const banner=$('snapBanner');
+  if(snapOpen){
+    banner.classList.remove('hidden');
+    banner.textContent='⚡ SNAP! Top of the middle is '+view.snapWindow.topRank+' — click one of YOUR cards if you hold a '+view.snapWindow.topRank+' (you may snap more than once in this window). Snaps never trigger effects.';
+  } else banner.classList.add('hidden');
+  // opponents
+  const oppBox=$('opponentsBox'); oppBox.innerHTML='';
+  view.players.filter(p=>p.id!==myId).forEach(p=>{
+    const d=document.createElement('div');
+    const active=p.id===view.turnPlayerId;
+    const isCaller=view.wellington.calledBy===p.id;
+    d.className='seat'+(active?' active':'')+(isCaller?' caller':'');
+    d.innerHTML='<div class="sname">'+esc(p.name)+(p.isBot?' 🤖':'')+' <span class="tag2">'+(isCaller?'🏆 called WELLINGTON — protected':(active?'• to move':''))+' • '+p.cards.length+' card'+(p.cards.length===1?'':'s')+'</span></div>'+
+      '<div class="scards" data-pid="'+p.id+'">'+p.cards.map((c,i)=>'<span data-pid="'+p.id+'" data-slot="'+i+'">'+miniCardHtml(c)+'</span>').join('')+'</div>';
+    oppBox.appendChild(d);
+  });
+  // bind opponent card clicks (effect targets)
+  oppBox.querySelectorAll('[data-slot]').forEach(el=>{
+    el.addEventListener('click',()=>onOpponentCard(el.getAttribute('data-pid'), parseInt(el.getAttribute('data-slot'),10)));
+  });
+  // centre piles
+  $('deckCount').textContent=view.deckCount+' left';
+  $('discardCount').textContent=view.discard.length+' card'+(view.discard.length===1?'':'s');
+  const top=view.discard.length?view.discard[view.discard.length-1]:null;
+  $('discardPile').outerHTML='<div class="card-big'+(top&&((top.suit==='\u2665'||top.suit==='\u2666'))?' red':'')+'" id="discardPile">'+(top?('<span>'+esc(top.rank)+'</span><span class="suit">'+esc(top.suit)+'</span><span class="pts">'+cardPointsLabel(top)+' pts</span>'):'<span style="font-size:26px">—</span>')+'</div>';
+  // my seat
+  const myBox=$('mySeat'); myBox.innerHTML='';
+  const md=document.createElement('div');
+  md.className='seat'+(isMyTurn?' active':'')+(view.wellington.calledBy===myId?' caller':'');
+  md.innerHTML='<div class="sname">'+esc(me.name)+' (you) <span class="tag2">'+(view.wellington.calledBy===myId?'🏆 you called WELLINGTON — your cards are protected':(isMyTurn?'• your turn':''))+' • '+me.cards.length+' card'+(me.cards.length===1?'':'s')+'</span></div><div class="scards" id="myCards"></div>';
+  myBox.appendChild(md);
+  const myCards=$('myCards');
+  me.cards.forEach((c,i)=>{
+    const holder=document.createElement('span');
+    holder.innerHTML=cardHtml(c,'');
+    const el=holder.firstChild;
+    el.addEventListener('click',()=>onMyCard(i));
+    myCards.appendChild(el);
+  });
+  // drawn card box
+  const drawnBox=$('drawnBox');
+  if(view.phase==='drawn'&&view.drawnCard&&view.drawnBy===myId){
+    drawnBox.classList.remove('hidden');
+    const dc=$('drawnCard');
+    if(dc){ const tmp=document.createElement('div'); tmp.innerHTML=cardHtml(view.drawnCard,''); const nc=tmp.firstChild; nc.id='drawnCard'; dc.replaceWith(nc); }
+  } else drawnBox.classList.add('hidden');
+  // Wellington button: only on my turn, phase play, before draw, once per game
+  const wbtn=$('btnWellington');
+  const canCall=view.phase==='play'&&isMyTurn&&!view.wellington.calledBy;
+  wbtn.disabled=!canCall;
+  wbtn.textContent=view.wellington.calledBy?('🏆 WELLINGTON called by '+(view.players.find(p=>p.id===view.wellington.calledBy)||{}).name):'🏆 WELLINGTON';
+  // peek done button
+  show('btnPeekDone', view.phase==='peek'&&!me.peekDone);
+  $('btnPeekDone').textContent= me.peekedCount>=2 ? 'Done peeking — start game' : ('Done peeking ('+me.peekedCount+'/2 seen)');
+  // effect prompt + skip
+  const eff=view.pendingEffect;
+  show('btnEffectSkip', !!(eff&&eff.by===myId));
+  if(eff&&eff.by===myId){
+    if(eff.kind==='peekOwn') $('effectPrompt').textContent='Your 5: click one of YOUR cards to peek at it.';
+    else if(eff.kind==='peekOther') $('effectPrompt').textContent='Your 6: click one of ANOTHER player\'s cards to peek at it.';
+    else if(eff.kind==='swapBlind') $('effectPrompt').textContent= eff.hasOwn ? 'Your 7 (blind swap): now click an OPPONENT\'s card — you look at neither.' : 'Your 7 (blind swap): first click one of YOUR cards.';
+    else if(eff.kind==='swapSeen') $('effectPrompt').textContent= eff.hasOwn ? 'Your 8: now click an OPPONENT\'s card — you\'ll see both cards before they swap.' : 'Your 8: first click one of YOUR cards (you\'ll see it).';
+  } else if(!eff) { /* keep toast text unless it is an effect prompt */ }
+  // log
+  $('logBox').innerHTML=(view.log||[]).map(l=>'<div>'+esc(l)+'</div>').join('');
+  if(view.phase==='over') showOver();
+}
+function showOver(){
+  if(!view||view.phase!=='over') return;
+  const winNames=(view.winners||[]).map(id=>{ const p=view.players.find(x=>x.id===id); return p?p.name:id; });
+  $('overTitle').textContent='🏆 '+(winNames.length>1?'Tie — shared win!':winNames.join(' & ')+' wins!');
+  $('overBody').innerHTML=(view.scores||[]).map(s=>{
+    const p=view.players.find(x=>x.id===s.playerId);
+    const isW=(view.winners||[]).indexOf(s.playerId)>=0;
+    return '<div class="end-card'+(isW?' winner':'')+'"><b>'+esc(p?p.name:s.playerId)+'</b>'+(isW?' 👑':'')+' — <b>'+s.total+' pts</b><br>'+
+      s.breakdown.map(b=>esc(b.rank+b.suit)+' ('+(b.points>0?'+':'')+b.points+')').join(' ') +'</div>';
+  }).join('')+'<p style="color:var(--mut);font-size:13px">'+esc(view.overReason||'')+'</p>';
+  show('overModal',true);
+}
+function hideOver(){ show('overModal',false); }
+
+/* ---------- clicks: route through applyAction (local/host) or the host (guest) ---------- */
+function submitAction(action){
+  if(playMode==='online'&&!isHost){ sendToHost({t:'action', action}); return; }
+  doLocalAction(action);
+}
+function onMyCard(slot){
+  if(!view) return;
+  if(view.phase==='peek'){
+    const me=view.players.find(p=>p.id===myId);
+    if(me.peekDone) return;
+    if(me.peekedCount>=2){ toast('You already peeked at 2 — press Done.'); return; }
+    if(playMode==='online'&&!isHost){ sendToHost({t:'action', action:{type:'peek', slot}}); return; }
+    const res=doLocalAction({type:'peek', slot});
+    if(res&&res.ok&&res.revealed) showReveal(res.revealed);
+    return;
+  }
+  if(view.pendingEffect&&view.pendingEffect.by===myId){
+    const eff=view.pendingEffect;
+    if(eff.kind==='peekOwn'){ submitAction({type:'effectPeekOwn', slot}); return; }
+    if(eff.kind==='swapBlind'||eff.kind==='swapSeen'){ submitAction({type:'effectSwapOwn', slot}); return; }
+    toast('Pick an opponent\'s card for this effect.'); return;
+  }
+  if(view.phase==='drawn'&&view.turnPlayerId===myId){
+    submitAction({type:'swap', slot}); return; // blind swap — you do NOT see the card you swap out
+  }
+  // Snap window: clicking your own card attempts a snap (any phase except peek/over).
+  if(view.snapWindow&&view.snapWindow.open){
+    submitAction({type:'snap', slot}); return;
+  }
+  toast(view.turnPlayerId===myId?'Draw a card first (click the draw pile).':'Not your turn — wait, or snap if you hold the matching rank.');
+}
+function onOpponentCard(pid, slot){
+  if(!view) return;
+  if(view.pendingEffect&&view.pendingEffect.by===myId){
+    const eff=view.pendingEffect;
+    if(eff.kind==='peekOther'){ submitAction({type:'effectPeekOther', targetPlayerId:pid, slot}); return; }
+    if((eff.kind==='swapBlind'||eff.kind==='swapSeen')&&eff.hasOwn){ submitAction({type:'effectSwapOther', targetPlayerId:pid, slot}); return; }
+    if(eff.kind==='swapBlind'||eff.kind==='swapSeen'){ toast('Pick one of YOUR cards first.'); return; }
+  }
+}
+$('drawPile').addEventListener('click',()=>{
+  if(!view) return;
+  if(view.turnPlayerId!==myId){ toast('Not your turn.'); return; }
+  if(view.phase==='play'||view.phase==='final') submitAction({type:'draw'});
+});
+$('btnDiscardDrawn').addEventListener('click',()=>submitAction({type:'discardDrawn'}));
+$('btnWellington').addEventListener('click',()=>{
+  if(!confirm('Call WELLINGTON? Every other player gets exactly one last turn, then cards are revealed. You cannot draw or discard this turn.')) return;
+  submitAction({type:'wellington'});
+});
+$('btnPeekDone').addEventListener('click',()=>submitAction({type:'peekDone'}));
+$('btnEffectSkip').addEventListener('click',()=>submitAction({type:'effectSkip'}));
+$('btnMenu2').onclick=backToMenu;
+$('btnOverMenu').onclick=()=>{ hideOver(); backToMenu(); };
+$('btnOverRematch').onclick=()=>{ hideOver(); requestRematch(); };
+function backToMenu(){
+  unregisterPublicRoom();
+  try{ if(conn) conn.close(); }catch(e){}
+  try{ if(peer) peer.destroy(); }catch(e){}
+  for(const c of Object.values(conns)){ try{ c.close(); }catch(e){} }
+  peer=null; conn=null; conns={}; clients={}; roomCode=null; fullState=null; view=null;
+  stopHeartbeat(); stopHelloLoop(); clearTimeout(resendTimer); clearTimeout(botTimer);
+  setMenuMsg(''); hideOver();
+  show('gameScreen',false); show('lobbyScreen',false); show('menuScreen',true);
+}
+function requestRematch(){
+  if(playMode==='online'&&!isHost){ sendToHost({t:'rematch-request'}); toast('Rematch requested — waiting for host…'); return; }
+  if(playMode==='online'&&isHost){ startHostedGame(); return; }
+  // local vs bots: same players, new deal
+  const names=fullState?fullState.players.map(p=>({name:p.name,isBot:p.isBot})):[{name:myName,isBot:false}];
+  startLocalGame(names);
+}
+
+/* ---------- bots (local + host-run) ---------- */
+function scheduleBots(){
+  clearTimeout(botTimer);
+  if(!fullState||fullState.phase==='over') return;
+  const gid=gameId;
+  botTimer=setTimeout(()=>{
+    if(gid!==gameId||!fullState||fullState.phase==='over') return;
+    // Give every bot a chance to snap first (in seat order, random-ish).
+    if(fullState.snapWindow&&fullState.snapWindow.open){
+      for(const p of fullState.players){
+        if(!p.isBot) continue;
+        const a=botChooseAction(fullState,p.id);
+        if(a&&a.type==='snap'){ const r=applyAction(fullState,p.id,a); if(r&&r.ok){ broadcastOrRefresh(); scheduleBots(); return; } }
+      }
+    }
+    // Then whoever must act (turn player / effect owner / peeking bot) acts.
+    const actor = fullState.pendingEffect ? fullState.pendingEffect.by
+      : fullState.phase==='peek' ? (fullState.players.find(p=>!p.peekDone)||{}).id
+      : fullState.players[fullState.turnIdx].id;
+    const bot=fullState.players.find(p=>p.id===actor&&p.isBot);
+    if(bot){
+      const a=botChooseAction(fullState,bot.id);
+      if(a){ const r=applyAction(fullState,bot.id,a); if(r&&r.ok){ broadcastOrRefresh(); } }
+      scheduleBots(); return;
+    }
+    // No bot to act right now (a human must act) — but a bot might still
+    // snap later, so keep a slow poll while the snap window is open.
+    if(fullState.snapWindow&&fullState.snapWindow.open){ botTimer=setTimeout(scheduleBots, 900); }
+  }, 550);
+}
+function broadcastOrRefresh(){
+  if(playMode==='online'&&isHost) broadcastViews();
+  else { refreshView(); render(); }
+  if(fullState&&fullState.phase==='over') showOver();
+}
+
+/* ---------- multiplayer (PeerJS, host-authoritative, filtered views) ---------- */
+function peerIdFor(code){ return 'wellington-v1-'+code.toUpperCase(); }
+function makeCode(){ const chars='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++) s+=chars[Math.floor(Math.random()*chars.length)]; return s; }
+function myPlayerName(){ return ($('nameInput').value||'').trim()||'Player'; }
+function startHeartbeat(){
+  stopHeartbeat();
+  if(playMode!=='online') return;
+  heartbeatTimer=setInterval(()=>{
+    if(isHost){ for(const cid of Object.keys(conns)){ const c=conns[cid]; if(c&&c.open){ try{ c.send({t:'ping', hash:stateFingerprint(fullState), n:fullState.log.length}); }catch(e){} } } }
+    else sendToHost({t:'ping', hash:view?viewHashOf(view):0, n:view?view.log.length:0});
+  },4000);
+}
+function stopHeartbeat(){ clearInterval(heartbeatTimer); heartbeatTimer=null; }
+function startHelloLoop(){ stopHelloLoop(); helloTimer=setInterval(()=>{ if(!stateReceived) sendToHost({t:'hello'}); else stopHelloLoop(); },2000); sendToHost({t:'hello'}); }
+function stopHelloLoop(){ clearInterval(helloTimer); helloTimer=null; }
+function renderLobby(){
+  $('lobbyCode').textContent=roomCode||'';
+  $('lobbyMsg').textContent=(roomVisibility==='public'?'🌍 Public room — listed in Browse public rooms while it waits for players. ':'🔒 Private room — code-only. ')+'Max '+roomMaxPlayers+' players (bots included). Share the code with your friends.';
+  $('lobbyList').innerHTML=lobbyPlayers.map(p=>'<div class="lobby-player"><span>'+esc(p.name)+(p.isBot?' 🤖':'')+'</span><span style="color:var(--mut)">'+(p.isHost?'host':'')+'</span></div>').join('')+
+    '<p style="color:var(--mut);font-size:13px;margin-top:8px">'+lobbyPlayers.length+' / '+roomMaxPlayers+' players — need at least 2 to start.</p>';
+  const hostView=isHost;
+  show('btnStartGame', hostView);
+  $('btnStartGame').disabled=lobbyPlayers.length<2;
+  $('lobbyWait').textContent=hostView?'You are the host — press Start when everyone is in.':'Waiting for the host to start…';
+}
+function showLobby(){
+  show('menuScreen',false); show('gameScreen',false); show('lobbyScreen',true); renderLobby();
+}
+function openBotPicker(title, sub, onPick){
+  $('botModalTitle').textContent=title; $('botModalSub').textContent=sub;
+  const box=$('botPick'); box.innerHTML='';
+  const maxBots=title.indexOf('lobby')>=0?5:5;
+  for(let n=0;n<=maxBots;n++){
+    const b=document.createElement('button'); b.type='button'; b.textContent=n===0?'0':(''+n);
+    b.title=n+' bot'+(n===1?'':'s');
+    b.onclick=()=>{ show('botModal',false); onPick(n); };
+    box.appendChild(b);
+  }
+  show('botModal',true);
+}
+$('botCancel').onclick=()=>show('botModal',false);
+$('btnBots').onclick=()=>{
+  openBotPicker('How many bots?', 'You + bots, 2–6 players total. Fully local, works offline.', (n)=>{
+    if(n<1){ setMenuMsg('Pick at least 1 bot for a solo game — or create a lobby to play with friends.'); return; }
+    const names=[{name:myPlayerName(),isBot:false}].concat(botNames(n).map(x=>({name:x,isBot:true})));
+    startLocalGame(names);
+  });
+};
+/* ---- create lobby: bots -> visibility + max players -> create ---- */
+function openRoomOptions(){
+  roomVisibility='private'; roomMaxPlayers=6;
+  const minMax=1+pendingLobbyBots; // host + bots already take seats
+  const visBox=$('visPick');
+  const paintVis=()=>{ visBox.querySelectorAll('button').forEach(b=>{ b.style.outline=(b.getAttribute('data-vis')===roomVisibility)?'3px solid var(--gold)':'none'; }); };
+  visBox.querySelectorAll('button').forEach(b=>{ b.onclick=()=>{ roomVisibility=b.getAttribute('data-vis'); paintVis(); }; });
+  paintVis();
+  const maxBox=$('maxPick'); maxBox.innerHTML='';
+  for(let n=2;n<=6;n++){
+    const b=document.createElement('button'); b.type='button'; b.textContent=''+n;
+    b.disabled=n<minMax;
+    b.onclick=()=>{ roomMaxPlayers=n; paintMax(); };
+    maxBox.appendChild(b);
+  }
+  const paintMax=()=>{ maxBox.querySelectorAll('button').forEach(b=>{ b.style.outline=(parseInt(b.textContent,10)===roomMaxPlayers)?'3px solid var(--gold)':'none'; }); };
+  if(roomMaxPlayers<minMax) roomMaxPlayers=minMax;
+  paintMax();
+  $('roomOptMsg').textContent= pendingLobbyBots>0 ? ('You + '+pendingLobbyBots+' bot'+(pendingLobbyBots===1?'':'s')+' already take '+(1+pendingLobbyBots)+' seats, so the max starts there.') : '';
+  show('roomOptModal',true);
+}
+$('roomOptCancel').onclick=()=>show('roomOptModal',false);
+$('roomOptCreate').onclick=()=>{ show('roomOptModal',false); doCreateLobby(); };
+$('btnCreate').onclick=()=>{
+  if(typeof Peer==='undefined'){ setMenuMsg('Could not load the multiplayer library (PeerJS). Check your connection — bot play still works.'); return; }
+  openBotPicker('Create lobby — how many bots?', 'Bots fill seats in your lobby (max 6 players total: humans + bots).', (n)=>{
+    pendingLobbyBots=n; openRoomOptions();
+  });
+};
+function doCreateLobby(){
+  lobbyBots=pendingLobbyBots;
+  const code=makeCode(); roomCode=code;
+  setMenuMsg('Creating lobby '+code+'…');
+  try{ if(peer) peer.destroy(); }catch(e){}
+  peer=new Peer(peerIdFor(code));
+  peer.on('open',()=>{
+    isHost=true; playMode='online';
+    lobbyPlayers=[{id:'host',name:myPlayerName(),isBot:false,isHost:true}];
+    for(let i=0;i<lobbyBots;i++) lobbyPlayers.push({id:'bot'+i,name:botNames(lobbyBots)[i],isBot:true});
+    setMenuMsg('Lobby '+code+' is live — send the code to your friends.');
+    showLobby(); startHeartbeat();
+    if(roomVisibility==='public') registerPublicRoom();
+  });
+  peer.on('connection',c=>{
+    const cid='c'+Math.random().toString(36).slice(2,8);
+    conns[cid]=c; clients[cid]={name:'…'};
+    c.on('data',msg=>handleHostMsg(cid,msg));
+    c.on('close',()=>{ delete conns[cid]; const ix=lobbyPlayers.findIndex(p=>p.id===cid); if(ix>=0) lobbyPlayers.splice(ix,1); if(fullState){ /* a player leaving mid-game: keep playing, their cards stay */ } renderLobby(); });
+    c.on('open',()=>{ try{ c.send({t:'welcome', yourId:cid, code:roomCode}); }catch(e){} });
+  });
+  peer.on('error',err=>{ setMenuMsg('Could not create the lobby ('+(err&&err.type||'error')+'). Try again.'); });
+}
+/* ---- public rooms directory (PeerJS-only, no server) ----
+   A public host claims one directory slot (first free of 1..10) and
+   answers list queries with its room info. The browser asks every slot
+   and shows the rooms that answer; empty slots simply never answer.
+   No automatic matchmaking: joining is always a manual tap below. */
+function currentRoomInfo(){
+  return createRoomInfo({code:roomCode, hostName:myPlayerName(), players:lobbyPlayers.length, maxPlayers:roomMaxPlayers, bots:lobbyBots, status:fullState?'playing':'waiting'});
+}
+function registerPublicRoom(){
+  unregisterPublicRoom();
+  if(roomVisibility!=='public'||typeof Peer==='undefined') return;
+  let slot=1;
+  const trySlot=()=>{
+    if(slot>DIRECTORY_SLOTS){ return; } // all slots busy: the room still works via its code
+    const id=directoryPeerId(slot);
+    let p;
+    try{ p=new Peer(id); }catch(e){ return; }
+    dirSlot=slot;
+    p.on('open',()=>{ dirPeer=p; });
+    p.on('connection',c=>{
+      const answer=()=>{ try{ c.send({t:'room-info', room:currentRoomInfo()}); }catch(e){} };
+      c.on('open',answer);
+      c.on('data',msg=>{ if(msg&&msg.t==='list-query') answer(); });
+    });
+    p.on('error',err=>{
+      if(err&&err.type==='unavailable-id'){ try{ p.destroy(); }catch(e){} slot++; trySlot(); }
+      else { try{ p.destroy(); }catch(e){} dirPeer=null; dirSlot=0; /* directory unreachable: room still works via code */ }
+    });
+  };
+  trySlot();
+}
+function unregisterPublicRoom(){
+  if(dirPeer){ try{ dirPeer.destroy(); }catch(e){} dirPeer=null; dirSlot=0; }
+}
+function renderRoomsList(rooms, directoryOk){
+  const box=$('roomsList');
+  if(!rooms.length){
+    $('roomsMsg').textContent = directoryOk===false
+      ? 'Couldn\'t load the list — the directory didn\'t answer. Join with a code instead.'
+      : 'No public rooms right now — create one, or join a private lobby with its code.';
+    box.innerHTML='';
+    return;
+  }
+  $('roomsMsg').textContent=rooms.length+' public room'+(rooms.length===1?'':'s')+' open — tap one to join. (No auto-join: you always choose.)';
+  box.innerHTML=rooms.map(r=>{
+    const full=r.players>=r.maxPlayers;
+    const playing=r.status==='playing';
+    return '<div class="lobby-player"><span>🌍 <b>'+esc(r.hostName)+'</b> <span style="color:var(--mut)">· '+esc(r.code)+' · '+r.players+'/'+r.maxPlayers+' players'+(r.bots?' · '+r.bots+' bot'+(r.bots===1?'':'s'):'')+' · '+(playing?'playing':'waiting')+'</span></span>'+
+      (playing?'<span style="color:var(--mut)">playing</span>'
+        : full?'<span style="color:var(--mut)">full</span>'
+        : '<button type="button" class="small" data-room="'+esc(r.code)+'">Join →</button>')+'</div>';
+  }).join('');
+  box.querySelectorAll('[data-room]').forEach(b=>{ b.addEventListener('click',()=>joinRoom(b.getAttribute('data-room'))); });
+}
+function browsePublicRooms(){
+  if(typeof Peer==='undefined'){ $('roomsMsg').textContent='Couldn\'t load the list (multiplayer library unavailable) — join with a code instead.'; renderRoomsList([], false); return; }
+  $('roomsMsg').textContent='Asking the directory…';
+  $('roomsList').innerHTML='';
+  const rooms=[];
+  let probe, opened=false, finished=false;
+  const finish=()=>{ if(finished) return; finished=true; try{ probe.destroy(); }catch(e){} renderRoomsList(rooms, opened); };
+  try{ probe=new Peer(); }catch(e){ $('roomsMsg').textContent='Couldn\'t load the list — join with a code instead.'; return; }
+  setTimeout(finish, 5000);
+  probe.on('open',()=>{
+    opened=true;
+    for(let n=1;n<=DIRECTORY_SLOTS;n++){
+      const c=probe.connect(directoryPeerId(n),{reliable:true});
+      c.on('open',()=>{ try{ c.send({t:'list-query'}); }catch(e){} });
+      c.on('data',msg=>{
+        if(msg&&msg.t==='room-info'&&msg.room){
+          const info=createRoomInfo(msg.room);
+          if(info.code&&!rooms.find(r=>r.code===info.code)) rooms.push(info);
+          renderRoomsList(rooms, true);
+        }
+      });
+      // A connect to an empty slot errors with 'peer-unavailable' — normal, ignore.
+      c.on('error',()=>{});
+    }
+  });
+  probe.on('error',()=>{ /* broker unreachable: the timeout finishes with an honest message */ });
+}
+$('btnBrowseRooms').onclick=browsePublicRooms;
+$('btnRefreshRooms').onclick=browsePublicRooms;
+
+$('btnJoin').onclick=()=>{
+  const code=($('joinCode').value||'').trim().toUpperCase();
+  if(!code){ setMenuMsg('Type a lobby code first.'); return; }
+  joinRoom(code);
+};
+function joinRoom(code){
+  if(typeof Peer==='undefined'){ setMenuMsg('Could not load the multiplayer library (PeerJS). Check your connection and try again.'); return; }
+  roomCode=code; setMenuMsg('Joining lobby '+code+'…');
+  try{ if(peer) peer.destroy(); }catch(e){}
+  peer=new Peer();
+  peer.on('open',()=>{
+    const c=peer.connect(peerIdFor(code),{reliable:true});
+    conn=c;
+    c.on('data',msg=>handleGuestMsg(msg));
+    c.on('close',()=>{ stopHeartbeat(); stopHelloLoop(); if(view&&view.phase!=='over'){ $('connBox').innerHTML='<b>Host disconnected.</b> The lobby is gone — head back to the menu for a new game.'; } });
+    c.on('open',()=>{ setMenuMsg('Joined lobby '+code+'! Say hi — waiting in the lobby…'); sendToHost({t:'join', name:myPlayerName()}); });
+    setTimeout(()=>{ if(!conn||!conn.open) setMenuMsg('Still trying to reach lobby '+code+' — is the code right, and is the host\'s lobby still open?'); },6000);
+  });
+  peer.on('error',err=>{ setMenuMsg('Could not join lobby '+code+' ('+(err&&err.type||'error')+'). Double-check the code.'); });
+}
+function handleHostMsg(cid, msg){
+  if(!msg||typeof msg!=='object') return;
+  if(msg.t==='join'){
+    // Max-players enforcement (bots count: lobbyPlayers already includes them).
+    const check=canJoinRoom(currentRoomInfo(), lobbyPlayers.length);
+    if(!check.ok){
+      try{ conns[cid].send({t:'join-rejected', error:check.error}); }catch(e){}
+      try{ conns[cid].close(); }catch(e){}
+      delete conns[cid];
+      return;
+    }
+    clients[cid]={name:msg.name||'Player'};
+    if(!lobbyPlayers.find(p=>p.id===cid)) lobbyPlayers.push({id:cid,name:msg.name||'Player',isBot:false});
+    renderLobby();
+    for(const id of Object.keys(conns)){ try{ conns[id].send({t:'lobby', players:lobbyPlayers, code:roomCode, maxPlayers:roomMaxPlayers, visibility:roomVisibility}); }catch(e){} }
+  } else if(msg.t==='action'){
+    if(!fullState) return;
+    // Guests connect under a random connection id (cid); their in-game
+    // seat id is stored on the connection when the game starts.
+    const seatId=(conns[cid]&&conns[cid].gameId)||cid;
+    const res=applyAction(fullState, seatId, msg.action);
+    if(res&&res.ok){
+      // Host replies with the actor's fresh filtered view (ack) + broadcasts to all.
+      try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState), ack:true, result:res}); }catch(e){}
+      broadcastViews(); scheduleBots();
+    } else {
+      try{ conns[cid].send({t:'action-error', error:res?res.error:'invalid action'}); }catch(e){}
+    }
+  } else if(msg.t==='hello'){
+    const seatId=(conns[cid]&&conns[cid].gameId)||cid;
+    if(fullState){ try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState)}); }catch(e){} }
+  } else if(msg.t==='need-sync'){
+    const seatId=(conns[cid]&&conns[cid].gameId)||cid;
+    if(fullState){ try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState)}); }catch(e){} }
+  } else if(msg.t==='ping'){
+    const seatId=(conns[cid]&&conns[cid].gameId)||cid;
+    if(fullState&&msg.hash!==stateFingerprint(fullState)){ try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState)}); }catch(e){} }
+  } else if(msg.t==='rematch-request'){
+    startHostedGame();
+  }
+}
+function handleGuestMsg(msg){
+  if(!msg||typeof msg!=='object') return;
+  if(msg.t==='welcome'){ myId=msg.yourId; stateReceived=false; startHelloLoop(); }
+  else if(msg.t==='seat'){ myId=msg.yourId; }
+  else if(msg.t==='join-rejected'){
+    setMenuMsg('Could not join: '+(msg.error||'room is full.'));
+    try{ if(conn) conn.close(); }catch(e){}
+    try{ if(peer) peer.destroy(); }catch(e){}
+    conn=null; peer=null; roomCode=null;
+    show('lobbyScreen',false); show('gameScreen',false); show('menuScreen',true);
+  }
+  else if(msg.t==='lobby'){
+    lobbyPlayers=msg.players||lobbyPlayers; roomCode=msg.code||roomCode;
+    if(msg.maxPlayers) roomMaxPlayers=msg.maxPlayers;
+    if(msg.visibility) roomVisibility=msg.visibility;
+    showLobby();
+  }
+  else if(msg.t==='view'){
+    view=msg.view; stateReceived=true;
+    show('menuScreen',false); show('lobbyScreen',false); show('gameScreen',true);
+    if(msg.result&&msg.result.revealed) showReveal(msg.result.revealed);
+    if(msg.result&&msg.result.drawn) { /* drawn renders from view */ }
+    render();
+    if(view.phase==='over') showOver();
+  }
+  else if(msg.t==='action-error'){ toast(msg.error||'That move was not allowed.'); }
+  else if(msg.t==='ping'){
+    if(view&&msg.hash!==viewHashOf(view)) sendToHost({t:'need-sync'});
+  }
+}
+$('btnCopyLobby').onclick=async()=>{
+  const link=location.origin+location.pathname+'?room='+roomCode;
+  const txt='Wellington Online lobby '+roomCode+' — join me: '+link;
+  try{ await navigator.clipboard.writeText(txt); $('btnCopyLobby').textContent='Copied!'; setTimeout(()=>$('btnCopyLobby').textContent='Copy code / link',1500); }
+  catch(e){ prompt('Copy your lobby link:',txt); }
+};
+$('btnLeaveLobby').onclick=backToMenu;
+$('btnStartGame').onclick=()=>{ if(isHost) startHostedGame(); };
+function startHostedGame(){
+  if(lobbyPlayers.length<2){ toast('Need at least 2 players to start.'); return; }
+  // The game is starting: leave the public directory so the room stops
+  // being listed (it can no longer be joined mid-game).
+  unregisterPublicRoom();
+  const names=lobbyPlayers.map(p=>({name:p.name,isBot:p.isBot}));
+  fullState=newGame(names);
+  // Map lobby ids to seat ids: host is p0, bots next, guests in join order.
+  const seatIds=fullState.players.map(p=>p.id);
+  const idMap={};
+  lobbyPlayers.forEach((p,i)=>{ idMap[p.id]=seatIds[i]; });
+  // Guests keep their connection id as their key in conns, but their
+  // in-game id is the seat id — store the mapping on the connection.
+  for(const cid of Object.keys(conns)){ const seat=idMap[cid]; if(seat){ conns[cid].gameId=seat; } }
+  // Rewrite applyAction routing for guests: host translates conn id -> seat id.
+  // (handleHostMsg uses cid directly, so patch it via a lookup table.)
+  window.__wellingtonSeatMap=idMap;
+  myId=seatIds[0]; // host is first in lobby list
+  isHost=true; playMode='online'; gameId++;
+  show('lobbyScreen',false); show('menuScreen',false); show('gameScreen',true);
+  $('connBox').innerHTML='Lobby <b>'+roomCode+'</b> — you are the host. Bots run on your device.';
+  // Tell every guest their seat id, then broadcast views.
+  for(const cid of Object.keys(conns)){
+    try{ conns[cid].send({t:'seat', yourId:idMap[cid]}); conns[cid].send({t:'view', view:filteredView(fullState, idMap[cid]), hash:stateFingerprint(fullState)}); }catch(e){}
+  }
+  broadcastViews(); startHeartbeat(); scheduleBots();
+}
+/* Deep link: ?room=CODE joins that lobby on load */
+(function deepLink(){
+  try{
+    const q=new URLSearchParams(location.search);
+    const room=(q.get('room')||'').trim().toUpperCase();
+    if(room){ $('joinCode').value=room; setMenuMsg('Lobby '+room+' detected — press Join lobby to enter.'); }
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Wellington Online — Cloudflare config
+#
+# Pages (the game itself): NO config needed. Deploy from the dashboard
+# (Framework preset: None, build command empty, output directory /)
+# or:  wrangler pages deploy . --project-name wellington-online
+#
+# There is no Worker relay in this repo: multiplayer is peer-to-peer
+# WebRTC via PeerJS's free public broker, and the public-rooms list is
+# kept by the room hosts themselves through fixed PeerJS directory
+# slots (see README). Nothing server-side is required to play.
+name = "wellington-online-relay"
+compatibility_date = "2026-11-01"
+# main = "src/index.js"   # uncomment only if a Worker relay is ever added
