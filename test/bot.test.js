@@ -163,6 +163,73 @@ function scheck(name, cond, extra) {
   st4.players[1].known = { '9♠': true };
   const d = E.botChooseAction(st4, 'p1', () => 0);
   scheck('bot snaps when it KNOWS it holds the matching rank', d && d.type === 'snap' && d.slot === 0, 'got ' + JSON.stringify(d));
+  // Bot 8: looks at both, then CONFIRMS only when the opponent card is lower.
+  // Bot holds 9(10) as its highest known card; opponent holds A(-2), known.
+  const st5 = E.newGame([{ name: 'B0', isBot: true }, { name: 'B1', isBot: true }], 25);
+  for (const p of st5.players) {
+    E.applyAction(st5, p.id, { type: 'peek', slot: 0 });
+    E.applyAction(st5, p.id, { type: 'peek', slot: 1 });
+    E.applyAction(st5, p.id, { type: 'peekDone' });
+  }
+  st5.players[0].cards = [
+    { id: 'A♠', rank: 'A', suit: '♠' }, { id: 'K♥', rank: 'K', suit: '♥' },
+    { id: '9♦', rank: '9', suit: '♦' }, { id: '10♣', rank: '10', suit: '♣' },
+  ];
+  st5.players[0].known = { 'A♠': true, 'K♥': true, '9♦': true, '10♣': true };
+  st5.players[1].cards = [
+    { id: 'A♦', rank: 'A', suit: '♦' }, { id: '3♥', rank: '3', suit: '♥' },
+    { id: '4♦', rank: '4', suit: '♦' }, { id: '6♣', rank: '6', suit: '♣' },
+  ];
+  st5.players[0].known['A♦'] = true; // bot has seen the opponent's Ace
+  st5.deck = [{ id: '8♠', rank: '8', suit: '♠' }];
+  E.applyAction(st5, 'p0', { type: 'draw' });
+  E.applyAction(st5, 'p0', { type: 'discardDrawn' }); // 8 -> swapSeen effect
+  let b = E.botChooseAction(st5, 'p0');
+  scheck('bot 8 picks its highest own card first', b && b.type === 'effectSwapOwn' && (b.slot === 2 || b.slot === 3), 'got ' + JSON.stringify(b));
+  const ownSlot8 = b.slot;
+  E.applyAction(st5, 'p0', b);
+  b = E.botChooseAction(st5, 'p0');
+  scheck('bot 8 picks the known-lower opponent Ace', b && b.type === 'effectSwapOther' && b.targetPlayerId === 'p1' && b.slot === 0, 'got ' + JSON.stringify(b));
+  const r8 = E.applyAction(st5, 'p0', b);
+  scheck('bot 8 pair reveal waits for the choice (no swap yet)', r8.ok && r8.awaitingDecision === true && st5.players[0].cards[ownSlot8].rank !== 'A' && st5.players[1].cards[0].rank === 'A', 'got ' + JSON.stringify(r8));
+  b = E.botChooseAction(st5, 'p0');
+  scheck('bot 8 CONFIRMS when the opponent card is lower', b && b.type === 'effectSwapConfirm', 'got ' + JSON.stringify(b));
+  E.applyAction(st5, 'p0', b);
+  scheck('bot 8 confirm swapped the Ace in', st5.players[0].cards.some(c => c.id === 'A♦') && st5.phase === 'play');
+  // Bot 8 DECLINES when the opponent card is higher: bot's best own card
+  // is a Joker (0); every opponent card it knows is 9+ (10), so it keeps.
+  const st6 = E.newGame([{ name: 'B0', isBot: true }, { name: 'B1', isBot: true }], 26);
+  for (const p of st6.players) {
+    E.applyAction(st6, p.id, { type: 'peek', slot: 0 });
+    E.applyAction(st6, p.id, { type: 'peek', slot: 1 });
+    E.applyAction(st6, p.id, { type: 'peekDone' });
+  }
+  st6.players[0].cards = [
+    { id: 'A♠', rank: 'A', suit: '♠' }, { id: 'A♥', rank: 'A', suit: '♥' },
+    { id: 'K♦', rank: 'K', suit: '♦' }, { id: 'Joker-♥', rank: 'Joker', suit: '♥' },
+  ];
+  st6.players[0].known = { 'A♠': true, 'A♥': true, 'K♦': true, 'Joker-♥': true };
+  st6.players[1].cards = [
+    { id: '9♠', rank: '9', suit: '♠' }, { id: '10♥', rank: '10', suit: '♥' },
+    { id: 'J♦', rank: 'J', suit: '♦' }, { id: 'Q♣', rank: 'Q', suit: '♣' },
+  ];
+  // Bot knows all four opponent cards (all 10+ points).
+  st6.players[1].cards.forEach(c => { st6.players[0].known[c.id] = true; });
+  st6.deck = [{ id: '8♠', rank: '8', suit: '♠' }];
+  E.applyAction(st6, 'p0', { type: 'draw' });
+  E.applyAction(st6, 'p0', { type: 'discardDrawn' }); // 8 -> swapSeen effect
+  b = E.botChooseAction(st6, 'p0');
+  scheck('bot 8 (decline case) picks its highest own card (Joker, 0)', b && b.type === 'effectSwapOwn' && b.slot === 3, 'got ' + JSON.stringify(b));
+  E.applyAction(st6, 'p0', b);
+  b = E.botChooseAction(st6, 'p0', () => 0.99); // deterministic: random pick path
+  scheck('bot 8 picks some opponent card to look at', b && b.type === 'effectSwapOther' && b.targetPlayerId === 'p1', 'got ' + JSON.stringify(b));
+  const r8b = E.applyAction(st6, 'p0', b);
+  scheck('bot 8 (decline case) pair reveal waits for the choice', r8b.ok && r8b.awaitingDecision, 'got ' + JSON.stringify(r8b));
+  b = E.botChooseAction(st6, 'p0');
+  scheck('bot 8 DECLINES when the opponent card is higher', b && b.type === 'effectSwapDecline', 'got ' + JSON.stringify(b));
+  const before6 = JSON.stringify(st6.players[0].cards) + JSON.stringify(st6.players[1].cards);
+  E.applyAction(st6, 'p0', b);
+  scheck('bot 8 decline leaves both hands unchanged', before6 === JSON.stringify(st6.players[0].cards) + JSON.stringify(st6.players[1].cards) && st6.phase === 'play');
 }
 
 console.log(`\nscripted: ${sPass} passed, ${sFail} failed`);

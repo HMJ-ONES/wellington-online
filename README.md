@@ -8,6 +8,8 @@ Play it right now — no sign-up, no download, no cost. PC and mobile.
 
 Each player gets **4 cards face-down** in a row. Peek at 2 of your own, then take turns drawing and swapping — blind. Lowest total when the game ends wins.
 
+**Cards on your table are always face-down.** You only ever see a card while you are actively looking at it (a peek, a 5/6/8 look, or the drawn card in your hand) — then it flips back face-down. A small gold dot marks cards you have seen, so you can tell *which* ones you've seen without seeing their values. The only time table cards stay face-up is the final reveal.
+
 ### Points
 
 | Card | Points |
@@ -32,7 +34,7 @@ Each player gets **4 cards face-down** in a row. Peek at 2 of your own, then tak
    - **5** — look at 1 of your own cards.
    - **6** — look at 1 of another player's cards.
    - **7** — exchange 1 of your cards with 1 of another player's, looking at **neither** (blind swap).
-   - **8** — exchange 1 of your cards with 1 of another player's, looking at **both** first (and no other card).
+   - **8** — exchange 1 of your cards with 1 of another player's, looking at **both** first — then you choose **Swap** or **Keep as they are**. Declining ends the effect with no swap (the look still counts as the effect used). The pair is always exactly one of your cards + one opponent's card — you can never look at two of your own cards with an 8.
    
    The effect must resolve before the turn passes.
 4. **Snap!** Whenever a card lands in the middle, **any** player may discard a card of the **same rank** from their own table, at any moment before the next card lands in the middle. Click one of your own cards while the SNAP banner is showing. If you hold two of that rank, you may snap **twice in a row** in the same window.
@@ -57,6 +59,8 @@ These are the calls made while building; they are also stated in the in-game Rul
 7. **Snap window:** the window is "open" whenever there is a top discard card, and it closes only in the sense that the *next* discard replaces the rank to match. A wrong snap does not close it.
 8. **Ties:** tied lowest totals share the win.
 9. **Bots and memory:** bots only act on cards they have *seen* (their peeks, drawn cards, 5/6/8 peeks, cards shown by a wrong snap). Unknown slots are estimated at ~8 (the deck average).
+10. **Face-down rule:** a table card is face-up only while it is actively being viewed (transient reveal, auto flip-back after ~4s) or at the final reveal. Memory of seen cards is kept for play, but the display never shows a value just because a card is known. A gold dot marks cards the viewer has seen.
+11. **Card 8 — look, then choose:** the 8 reveals both cards (transiently) and then shows a pop-up with both cards and the choice **Swap them** / **Keep as they are**. The pair is enforced at both layers: the engine rejects any 8 pair that is not one own + one opponent card (including locked/penalty and Wellington-caller targets), and the UI never offers own cards as the opponent pick. The same own+opponent rule applies to the blind 7.
 
 ## How to play
 
@@ -92,6 +96,16 @@ Bots peek 2 cards at the start, remember everything they have seen, estimate unk
 - call Wellington when their estimated total is ≤ 2, or when all their cards are known and the total is ≤ 5;
 - never act out of turn, never touch the Wellington caller's cards, and never snap or swap a locked penalty card.
 
+**Bot pace (one editable const, `BOT_PACE`, near the top of the UI script):** bots play at human speed — they think 1.4–2.0s before acting, pause 1.1–1.4s with the drawn card in hand, then act. A plain bot turn takes ~2.5–3.4s; a turn with a card effect adds one more think beat. Snap attempts are spaced 0.7–1.3s apart. Humans are never delayed — your actions apply instantly and animate afterwards.
+
+## Table feel — animations, round table, cognac
+
+**Animations (CSS only, no libraries):** cards fly from the draw pile to the acting player's hand; on a swap the drawn card slides into the slot and the old card slides to the discard pile; discards slide face-up into the middle; 7/8 swaps animate *both* cards along a path between the two seats; 5/6/8 looks flip the card face-up briefly in place, then back face-down; snaps fly to the discard pile; a Wellington call flashes a banner and highlights the caller's seat as protected. Every exchange is narrated in the log with names and slots but never values ("Ana swapped her 2nd card with your 3rd card"), and the two involved slots glow with a matching coloured outline — the glow is on the slot, the card stays a back. Animations are purely visual and never gate the engine: if one is interrupted (rematch, menu), the game still works.
+
+**Round table (landscape / desktop):** in landscape orientation on a screen ≥ 700px wide, the table becomes a round/oval felt table — seats arranged on an ellipse around it (your seat always at the bottom arc), draw + discard piles in the centre, status, log and WELLINGTON below the table so nothing overlaps. In portrait (phone upright) the stacked layout stays. The switch is a `matchMedia` listener (`(orientation: landscape) and (min-width: 700px)`) toggling a `round-table` class; seat math is two pure functions (`layoutModeFor`, `seatPositionsFor`) tested for 2–6 players in `test/layout.test.js`. Card flight paths use the seats' actual positions, so animations make sense in both layouts. Real-device visual checking in landscape/desktop browsers is still unverified.
+
+**🥃 Sip Cognac (local cosmetic fun only):** a "Sip Cognac" button sits on the menu and game screens. It affects **only your own screen** — never the game state, never other players' screens, never synced over PeerJS. Sips are counted per session ("Sips: 3"). At **5 sips** a mild effect starts — a gentle screen wobble/sway for **3 minutes from the 5th sip**. At **15 sips** a strong effect replaces it — a bigger sway/tilt with a very light blur for **6 minutes from the 15th sip**. Exact rules: sipping while mild leaves the 3-minute timer alone (it runs from the 5th sip); crossing 15 while mild upgrades to strong with a fresh 6-minute timer; sipping while strong adds 30 seconds per sip, capped at 6:00 remaining. A **Sober up** button while an effect is active clears it early (timer reset, sip count kept). The remaining time is shown ("Tipsy — 2:31 left" / "Wasted — 5:12 left"). Playability is a hard requirement: rotation is only a few degrees, blur is very light, cards and buttons stay readable and clickable, the wobble touches only the table/menu (modals, buttons and the log never wobble), and `prefers-reduced-motion` disables it entirely. Thresholds/durations live in one editable const (`COGNAC`, near the top of the UI script) and the level logic is a pure function (`drunkLevelForSips`) tested headlessly in `test/cognac.test.js`.
+
 ## $0 architecture — how multiplayer is free
 
 There is **no game server**. The whole game is one static file (`index.html`):
@@ -111,14 +125,19 @@ python3 -m http.server 8000
 # open http://localhost:8000/
 ```
 
-Tests (engine + bots, no browser needed):
+Tests (engine + bots + UI rules, no browser needed):
 
 ```bash
-node test/engine.test.js   # 135 checks: deck/deal, points, peek, turns, effects 5-8,
+node test/engine.test.js   # 178 checks: deck/deal, points, peek, turns, effects 5-8,
                            #   snaps (correct/wrong/multiple/effect-free), penalty lock,
                            #   Wellington, reshuffle, 0-card end, ties, hidden-info views,
-                           #   public-rooms helpers
-node test/bot.test.js      # 200 bot-only games (2-6 players) + scripted bot decisions
+                           #   public-rooms helpers, 8 swap-or-keep + own+own rejection,
+                           #   7 own+own rejection, flip-back, log narration, BOT_PACE bounds
+node test/bot.test.js      # 200 bot-only games (2-6 players) + 16 scripted bot decisions
+node test/cognac.test.js   # 18 checks: sip thresholds, labels, durations, wobble scoping,
+                           #   prefers-reduced-motion, sober-up
+node test/layout.test.js   # 50 checks: round vs stacked mode, seat positions for 2-6
+                           #   players (on-ellipse, distinct, non-overlapping), CSS/media rules
 ```
 
 ## Deploy to Cloudflare Pages ($0)
@@ -144,6 +163,8 @@ wrangler pages deploy . --project-name wellington-online
 index.html            the whole game (engine + UI + multiplayer), single file
 test/engine.test.js   engine unit tests (node)
 test/bot.test.js      bot stress test: 200 bot-only games + scripted decisions (node)
+test/cognac.test.js   cognac button thresholds + wobble scoping tests (node)
+test/layout.test.js   round-table layout mode + seat-position tests (node)
 wrangler.toml         Cloudflare Pages config (Pages needs no config; no Worker)
 README.md             this file
 LICENSE               MIT

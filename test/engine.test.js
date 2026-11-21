@@ -166,14 +166,31 @@ console.log('Card effects on a NORMAL turn discard (exactly one effect):');
   r = E.applyAction(t.st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 0 });
   check('7 step 2 swaps blind', r.ok && t.st.players[0].cards[0].rank === '2' && t.st.players[1].cards[0].rank === 'A');
   check('turn passes after 7 resolves', t.st.turnIdx === 1);
-  // 8 -> seen swap, both cards revealed
+  // 8 -> seen swap: look at both, THEN choose Swap or Keep (Nov 21 rule).
   t = discardDrawnRank('8');
   check('discarding a drawn 8 triggers swapSeen', t.d.effect === 'swapSeen');
   r = E.applyAction(t.st, 'p0', { type: 'effectSwapOwn', slot: 1 });
-  check('8 step 1 reveals own card (K)', r.ok && r.revealedOwn && r.revealedOwn.rank === 'K');
+  check('8 step 1 (own card) reveals NOTHING yet — pick is final', r.ok && r.ownPicked && !r.revealed && !r.revealedOwn);
+  check('8 step 1 does not change any card', t.st.players[0].cards[1].rank === 'K' && t.st.players[1].cards[3].rank === '6');
   r = E.applyAction(t.st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 3 });
-  check('8 step 2 reveals both cards', r.ok && r.revealed && r.revealed.own.rank === 'K' && r.revealed.other.rank === '6');
-  check('8 swapped the cards', t.st.players[0].cards[1].rank === '6' && t.st.players[1].cards[3].rank === 'K');
+  check('8 step 2 reveals BOTH cards and waits for the Swap/Keep choice', r.ok && r.awaitingDecision && r.revealed && r.revealed.own.rank === 'K' && r.revealed.other.rank === '6');
+  check('8 step 2 swaps NOTHING yet (cards still where they were)', t.st.players[0].cards[1].rank === 'K' && t.st.players[1].cards[3].rank === '6');
+  check('8 still pending while the player decides', t.st.phase === 'effect' && !!t.st.pendingEffect.awaitingDecision);
+  r = E.applyAction(t.st, 'p0', { type: 'effectSwapConfirm' });
+  check('8 confirm swaps the cards', r.ok && r.swapped && t.st.players[0].cards[1].rank === '6' && t.st.players[1].cards[3].rank === 'K');
+  check('turn passes after 8 confirm', t.st.turnIdx === 1 && t.st.phase === 'play');
+  // Decline path: same setup, player looks and keeps both cards.
+  t = discardDrawnRank('8');
+  E.applyAction(t.st, 'p0', { type: 'effectSwapOwn', slot: 1 });
+  r = E.applyAction(t.st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 3 });
+  if (!r.awaitingDecision) throw new Error('decline setup: expected awaitingDecision');
+  r = E.applyAction(t.st, 'p0', { type: 'effectSwapDecline' });
+  check('8 decline leaves both cards where they were', r.ok && r.declined && t.st.players[0].cards[1].rank === 'K' && t.st.players[1].cards[3].rank === '6');
+  check('turn passes after 8 decline (the look still counted as the effect)', t.st.turnIdx === 1 && t.st.phase === 'play');
+  // Confirm/decline without looking first are rejected.
+  t = discardDrawnRank('8');
+  check('8 confirm before picking both cards rejected', !E.applyAction(t.st, 'p0', { type: 'effectSwapConfirm' }).ok);
+  check('8 decline before picking both cards rejected', !E.applyAction(t.st, 'p0', { type: 'effectSwapDecline' }).ok);
   // Swapped-OUT table card also triggers its effect (it is the card placed in the middle).
   const st2 = riggedGame([
     [['5','♠'],['K','♥'],['9','♦'],['9','♣']],
@@ -191,6 +208,99 @@ console.log('Card effects on a NORMAL turn discard (exactly one effect):');
   t = discardDrawnRank('5');
   r = E.applyAction(t.st, 'p0', { type: 'effectSkip' });
   check('effect may be skipped', r.ok && r.skipped && t.st.turnIdx === 1);
+}
+
+console.log('Card 8 REGRESSION — the 8 can never look at two of the player\'s OWN cards:');
+{
+  // Setup helper: P0 discards a drawn 8, effect swapSeen pending.
+  function eightPending() {
+    const st = riggedGame([
+      [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+      [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+    ], { deck: [['7','♥'],['8','♠']] });
+    E.applyAction(st, 'p0', { type: 'draw' });
+    E.applyAction(st, 'p0', { type: 'discardDrawn' });
+    if (st.pendingEffect.kind !== 'swapSeen') throw new Error('setup: expected swapSeen, got ' + st.pendingEffect.kind);
+    return st;
+  }
+  let st = eightPending();
+  // NB: the rigged setup marks P0's slots 0-1 known ("as if peeked"), so
+  // the own pick below uses slot 2 (9♦), which starts UNKNOWN.
+  let r = E.applyAction(st, 'p0', { type: 'effectSwapOwn', slot: 2 });
+  check('8 own pick (slot 2) ok, reveals nothing', r.ok && !r.revealed && !r.revealedOwn);
+  check('8 own pick does NOT mark the card known (nothing was shown)', !st.players[0].known['9♦']);
+  r = E.applyAction(st, 'p0', { type: 'effectSwapOwn', slot: 1 });
+  check('8 SECOND own pick rejected — the own pick is final', !r.ok && /already picked/i.test(r.error || ''));
+  check('8 second own pick revealed nothing either', !r.revealed && !r.revealedOwn && !st.players[0].known['9♦'] && !st.players[0].known['9♣']);
+  check('8 still waits for an OPPONENT card (own pick unchanged)', st.pendingEffect.ownSlot === 2 && !st.pendingEffect.awaitingDecision);
+  // The opponent pick must be an opponent: targeting yourself is rejected,
+  // swaps nothing, and reveals nothing.
+  r = E.applyAction(st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p0', slot: 1 });
+  check('8 opponent pick targeting YOURSELF rejected', !r.ok && /ANOTHER/i.test(r.error || ''));
+  check('8 self-target revealed nothing and swapped nothing', !r.revealed && st.players[0].cards[1].rank === 'K' && st.players[0].cards[2].rank === '9');
+  check('8 effect still pending after rejected self-target', st.phase === 'effect' && st.pendingEffect.ownSlot === 2);
+  // A legal opponent pick now reveals exactly the pair — own slot 2 + p1 slot 3.
+  r = E.applyAction(st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 3 });
+  check('8 legal opponent pick reveals exactly own + opponent pair', r.ok && r.awaitingDecision && r.revealed.own.rank === '9' && r.revealed.other.rank === '6');
+  check('8 pair reveal marked ONLY those two cards known', st.players[0].known['9♦'] === true && st.players[0].known['6♣'] === true && !st.players[0].known['9♣']);
+  // While awaiting the decision, another opponent pick is rejected.
+  r = E.applyAction(st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 0 });
+  check('8 second opponent pick while deciding rejected', !r.ok && /Swap or Keep/i.test(r.error || ''));
+  // legalActions offers ONLY confirm/decline while deciding (no more picks).
+  const acts = E.legalActions(st, 'p0');
+  check('legalActions while 8 decides: offers confirm + decline only',
+    acts.some(a => a.type === 'effectSwapConfirm') && acts.some(a => a.type === 'effectSwapDecline') &&
+    !acts.some(a => a.type === 'effectSwapOwn') && !acts.some(a => a.type === 'effectSwapOther'));
+  // Atomic API path (effectSwap) obeys the same rule: reveal, no swap yet.
+  st = eightPending();
+  r = E.applyAction(st, 'p0', { type: 'effectSwap', ownSlot: 1, targetPlayerId: 'p1', targetSlot: 3 });
+  check('8 atomic effectSwap also reveals without swapping yet', r.ok && r.awaitingDecision && r.revealed.own.rank === 'K' && st.players[0].cards[1].rank === 'K' && st.players[1].cards[3].rank === '6');
+  r = E.applyAction(st, 'p0', { type: 'effectSwapConfirm' });
+  check('8 atomic path confirms into the swap', r.ok && r.swapped && st.players[0].cards[1].rank === '6');
+  // STALENESS: the revealed pair moves before the choice (a snap
+  // mid-effect) -> confirm fizzles safely instead of swapping the wrong cards.
+  st = eightPending();
+  E.applyAction(st, 'p0', { type: 'effectSwapOwn', slot: 1 }); // K
+  r = E.applyAction(st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 3 }); // 6
+  if (!r.awaitingDecision) throw new Error('staleness setup: expected awaitingDecision');
+  st.players[1].cards[0] = card('8', '♦'); // P1 now holds an 8 to snap (top rank is 8)
+  r = E.applyAction(st, 'p1', { type: 'snap', slot: 0 });
+  check('staleness setup: target snaps a card mid-effect', r.ok && r.correct && st.players[1].cards.length === 3);
+  check('staleness setup: the revealed 6 moved slots', st.players[1].cards[2].rank === '6');
+  r = E.applyAction(st, 'p0', { type: 'effectSwapConfirm' });
+  check('8 confirm after the cards moved FIZZLES safely (no swap, effect over)', r.ok && r.fizzled && st.phase === 'play' && st.players[0].cards[1].rank === 'K' && st.players[1].cards[2].rank === '6');
+  r = E.applyAction(st, 'p0', { type: 'effectSwap', ownSlot: 1, targetPlayerId: 'p0', targetSlot: 2 });
+  check('8 atomic effectSwap targeting yourself rejected', !r.ok && st.players[0].cards[1].rank === 'K' && st.players[0].cards[2].rank === '9');
+  // 7 (blind swap) has the same own+opponent enforcement.
+  const st7 = riggedGame([
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['9','♥'],['7','♠']] });
+  E.applyAction(st7, 'p0', { type: 'draw' });
+  E.applyAction(st7, 'p0', { type: 'discardDrawn' });
+  E.applyAction(st7, 'p0', { type: 'effectSwapOwn', slot: 0 });
+  r = E.applyAction(st7, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p0', slot: 1 });
+  check('7 opponent pick targeting yourself rejected', !r.ok && st7.players[0].cards[0].rank === 'A' && st7.players[0].cards[1].rank === 'K');
+  r = E.applyAction(st7, 'p0', { type: 'effectSwap', ownSlot: 0, targetPlayerId: 'p0', targetSlot: 1 });
+  check('7 atomic effectSwap targeting yourself rejected', !r.ok && st7.players[0].cards[0].rank === 'A');
+  r = E.applyAction(st7, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 0 });
+  check('7 legal opponent pick still swaps blind (nothing revealed)', r.ok && !r.revealed && st7.players[0].cards[0].rank === '2' && st7.players[1].cards[0].rank === 'A');
+}
+
+console.log('Log narration names slots, never hidden values:');
+{
+  const st = riggedGame([
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['9','♥'],['7','♠']] });
+  E.applyAction(st, 'p0', { type: 'draw' });
+  E.applyAction(st, 'p0', { type: 'discardDrawn' }); // 7 -> blind swap effect
+  E.applyAction(st, 'p0', { type: 'effectSwapOwn', slot: 0 });
+  E.applyAction(st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 2 });
+  const line = st.log[st.log.length - 1];
+  check('7 swap log names both slots ("1st card" / "3rd card")', /1st card/.test(line) && /3rd card/.test(line), 'log=' + line);
+  check('7 swap log contains no card rank (blind swap stays blind)', !/[23456789]|10|J|Q|K|A/.test(line.replace(/7/g, '').replace(/1st|3rd/g, '')), 'log=' + line);
+  check('ordinal helper works', E.ordinal(1) === '1st' && E.ordinal(2) === '2nd' && E.ordinal(3) === '3rd' && E.ordinal(4) === '4th' && E.ordinal(5) === '5th');
 }
 
 console.log('Snap — correct, wrong, multiple, and snaps NEVER trigger effects:');
@@ -436,8 +546,14 @@ console.log('Filtered view never leaks hidden cards:');
   const view = E.filteredView(st, 'p0');
   const bobView = view.players[1];
   check('opponent cards are backs (rank null) when unseen', bobView.cards.every(c => c.rank === null && c.suit === null));
-  check('own peeked cards ARE visible to owner', view.players[0].cards[0].rank !== null && view.players[0].cards[1].rank !== null);
-  check('own unpeeked cards are backs', view.players[0].cards[2].rank === null && view.players[0].cards[3].rank === null);
+  check('opponent cards carry no seen marker when unseen', bobView.cards.every(c => c.seen === false));
+  /* FACE-DOWN RULE (Nov 21): even cards the viewer HAS seen stay face-down
+     on the table — they only ever show their value while actively being
+     looked at (reveal modal) or at the final reveal. The view marks them
+     `seen` so the UI can show a small dot, without showing the value. */
+  check('own PEEKED cards stay FACE-DOWN on the table (rank null)', view.players[0].cards[0].rank === null && view.players[0].cards[1].rank === null);
+  check('own peeked cards carry a non-revealing seen marker', view.players[0].cards[0].seen === true && view.players[0].cards[1].seen === true);
+  check('own unpeeked cards are backs with no seen marker', view.players[0].cards[2].rank === null && view.players[0].cards[2].seen === false && view.players[0].cards[3].seen === false);
   const json = JSON.stringify(view);
   // Bob's actual card ranks must not appear anywhere except as discard
   // ranks (discard is empty here) — check his unpeeked card ids are absent.
@@ -491,6 +607,28 @@ console.log('Public rooms directory (headless — PeerJS part is code-verified o
   check('canJoinRoom: 1 host + 2 bots in a max-3 room is full', !E.canJoinRoom(E.createRoomInfo({ code: 'E', players: 3, maxPlayers: 3, bots: 2 }), 3).ok);
   check('canJoinRoom: playing room rejects', !E.canJoinRoom(E.createRoomInfo({ code: 'F', players: 2, maxPlayers: 6, status: 'playing' }), 2).ok);
   check('canJoinRoom: unknown room rejects', !E.canJoinRoom(null, 0).ok);
+}
+
+console.log('Bot pace + UI render rules (UI script block):');
+{
+  const uiSrc = blocks.find(s => s.includes('BOT_PACE'));
+  check('UI script defines BOT_PACE', !!uiSrc);
+  if (uiSrc) {
+    const num = (k) => { const m = uiSrc.match(new RegExp(k + ':\\s*(\\d+)')); return m ? parseInt(m[1], 10) : null; };
+    const thinkMin = num('thinkMin'), thinkMax = num('thinkMax'), afterDrawMin = num('afterDrawMin'), afterDrawMax = num('afterDrawMax');
+    check('BOT_PACE numbers parse', [thinkMin, thinkMax, afterDrawMin, afterDrawMax].every(n => typeof n === 'number'));
+    const plainMin = thinkMin + afterDrawMin, plainMax = thinkMax + afterDrawMax;
+    check('plain bot turn ≈ 2.5–4.5s (think + after-draw pause)', plainMin >= 2500 && plainMax <= 4500, 'plain turn ' + plainMin + '–' + plainMax + 'ms');
+    check('bot think is never instant (>=900ms)', thinkMin >= 900);
+    check('bot think never sluggish (<=2000ms)', thinkMax <= 2000);
+    // No render path may show a card value just because it is `known`:
+    // the UI script must never read .known — values come only from rank
+    // (final reveal / drawn card / transient reveal), never from memory.
+    check('UI script never reads .known to render a value', !/\.known\b/.test(uiSrc));
+    check('UI script shows a seen marker from .seen', /\.seen\b/.test(uiSrc));
+    check('UI script has a transient-reveal flip-back (auto-close + Put it back)', /revealTimer/.test(uiSrc) && /transientReveal/.test(uiSrc));
+    check('UI script has the 8 Swap/Keep confirm modal', /swapConfirmModal/.test(uiSrc) && /effectSwapConfirm/.test(uiSrc));
+  }
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
