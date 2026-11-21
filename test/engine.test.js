@@ -691,7 +691,7 @@ console.log('Bot pace + UI render rules (UI script block):');
     // until everyone has finished peeking, and a draw-pile click while
     // peeking explains instead of silently doing nothing.
     check('no seat claims the turn during the peek phase', /view\.turnPlayerId===myId&&!inPeek/.test(uiSrc) && /view\.phase!=='peek'/.test(uiSrc));
-    check('draw-pile click while peeking toasts an explanation', /Still peeking — press Done/.test(uiSrc));
+    check('draw-pile click while peeking toasts an explanation', /Still peeking — tap I/.test(uiSrc));
     // Done button nudges after peeking: blinks + scrolls into view once
     // per peek (only once the reveal modal is closed), never every render.
     check('Done button blinks after peeking (doneblink keyframes + attention class)', /@keyframes doneblink/.test(html) && /#btnPeekDone\.attention/.test(html) && /classList\.add\('attention'\)/.test(uiSrc));
@@ -814,6 +814,35 @@ console.log('removePlayer (disconnect withdrawal) + spectator views:');
   check('spectators cannot act (submitAction guard)', /amSpectator\(\)/.test(uiSrc2));
   check('spectator seat renders a watching panel', /👀 Spectating/.test(uiSrc2));
   check('host ignores actions from spectators', /if\(spectators\[cid\]\) return;/.test(uiSrc2));
+  // Guest peek bug (Nov 21, friend test): the guest never set playMode to
+  // 'online', so every guest action silently fell through to
+  // doLocalAction (no local state) and vanished. The guest must set it on
+  // welcome/seat/view, and the host must stamp every view with the
+  // receiver's seat id so a lost 'seat' message self-heals.
+  check('guest sets playMode online on welcome', /msg\.t==='welcome'\)\{ myId=msg\.yourId; playMode='online';/.test(uiSrc2));
+  check('guest sets playMode online on view', /else if\(msg\.t==='view'\)\{\s*\n\s*view=msg\.view; stateReceived=true;\s*\n\s*playMode='online';/.test(uiSrc2));
+  check('host stamps every view with the receiver seat id', /yourId:seatId/.test(uiSrc2) && /yourId:\(c\.gameId\|\|cid\)/.test(uiSrc2));
+  check('guest restores its seat id from any view', /if\(msg\.yourId!==undefined&&msg\.yourId!==null\) myId=msg\.yourId;/.test(uiSrc2));
+  check('onMyCard never throws when the seat is unassigned', /const me=view\.players\.find\(p=>p\.id===myId\);\s*\n\s*if\(!me\) return;/.test(uiSrc2));
+  check('host local actions broadcast to guests (doLocalAction)', /function doLocalAction\([\s\S]*?broadcastOrRefresh\(\); scheduleBots\(\);/.test(uiSrc2));
+  check('Ready button uses the strict seat lookup', /meStrict=view\.players\.find\(p=>p\.id===myId\)/.test(uiSrc2));
+  check('Ready button is labelled I\'m Ready', /I\\'m Ready/.test(uiSrc2));
+  check('seats show a Ready / peeking mark during the peek phase', /✓ Ready/.test(uiSrc2) && /…peeking/.test(uiSrc2));
+  check('peek status names who is still getting ready', /waiting=view\.players\.filter\(p=>!p\.peekDone\)/.test(uiSrc2));
+}
+
+console.log('Ready system (peekDone == Ready):');
+{
+  // One player readies: the log names them; the game waits for the rest.
+  let st = E.newGame(['A', 'B'], 5);
+  E.applyAction(st, 'p0', {type: 'peek', slot: 0});
+  E.applyAction(st, 'p0', {type: 'peek', slot: 1});
+  E.applyAction(st, 'p0', {type: 'peekDone'});
+  check('one player ready: game still in peek phase', st.phase === 'peek');
+  check('ready player is named in the log', st.log.some(l => /A is ready/.test(l)));
+  E.applyAction(st, 'p1', {type: 'peekDone'});
+  check('everyone ready: play starts', st.phase === 'play');
+  check('all-ready log line', st.log.some(l => /Everyone is ready/.test(l)));
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

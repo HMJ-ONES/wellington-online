@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Wellington Online v1.5 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
+<!-- Wellington Online v1.6 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -179,7 +179,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
     <h2>How Wellington works</h2>
     <ul>
       <li><b>Goal: lowest score wins.</b> Numbered cards are worth <b>their face value</b> (2 is 2, 10 is 10), Jack &amp; Queen <b>11</b>, Joker <b>−2</b>, King <b>−1</b>, Ace <b>0</b>. (Points are editable — see Rules.)</li>
-      <li><b>Start:</b> everyone gets 4 cards face-down. Peek at any <b>2 of your own</b> once, then put them back.</li>
+      <li><b>Start:</b> everyone gets 4 cards face-down. Peek at any <b>2 of your own</b> once, then tap <b>I'm Ready</b> — everyone peeks and readies at the same time.</li>
       <li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down. A small gold dot marks cards you have seen.</li>
       <li><b>Your turn:</b> draw the top card and look at it. Either <b>swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b> face-up. Exactly one discard per turn.</li>
       <li><b>Card effects</b> trigger ONLY on a normal turn discard (the drawn card you discard, or the table card you swap out): <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player's, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at both cards, then <b>choose</b> whether to swap them. Exactly one effect per turn discard. <b>Snapped cards never trigger effects</b> — not even a snapped 5, 6, 7 or 8.</li>
@@ -231,7 +231,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   </div>
   <p id="effectPrompt" style="margin-top:10px;font-weight:700;min-height:20px"></p>
   <div class="row">
-    <button id="btnPeekDone" type="button" class="ghost small hidden">Done peeking — start game</button>
+    <button id="btnPeekDone" type="button" class="ghost small hidden">✅ I'm Ready</button>
     <button id="btnEffectSkip" type="button" class="ghost small hidden">Skip effect</button>
     <button id="btnMenu2" type="button" class="ghost small">← Menu</button>
     <button id="btnRules2" type="button" class="ghost small">📖 Rules</button>
@@ -248,7 +248,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   </div>
 </div>
 
-<footer>Wellington Online v1.5 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
+<footer>Wellington Online v1.6 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
 Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, nothing to sign up for. The host holds the true game state; each player only ever sees their own cards.</footer>
 </div>
 
@@ -360,7 +360,7 @@ function newGame(playerNames, seed, opts){
     snapWindow:{open:false, topRank:null},
     snapTips: opts.snapTips!==false, // room setting: show the SNAP banner? (advanced players can turn it off at setup)
     wellington:{calledBy:null, active:false, remaining:[]},
-    pendingEffect:null, effectQueue:[], log:['Game started — peek at 2 of your own cards, then press Done.'],
+    pendingEffect:null, effectQueue:[], log:['Game started — peek at 2 of your own cards, then tap I\'m Ready.'],
     winners:null, scores:null, overReason:'', version:1 };
   return state;
 }
@@ -601,12 +601,16 @@ function doPeek(st, me, action){
   return {ok:true, revealed:clone(me.cards[slot]), slot};
 }
 function doPeekDone(st, me){
+  // peekDone == "Ready": the UI calls this Ready. Everyone peeks and
+  // readies at the same time, in no particular order; the game starts
+  // once every player is ready (peeking 0, 1 or 2 cards first).
   me.peekDone=true;
-  st.log.push(me.name+' finished peeking.');
   if(st.players.every(p=>p.peekDone)){
     st.phase='play'; st.turnIdx=0; st.turnCount=0;
     unlockForPlayer(st, currentPlayer(st));
-    st.log.push('All players peeked. '+currentPlayer(st).name+' starts.');
+    st.log.push('Everyone is ready. '+currentPlayer(st).name+' starts.');
+  } else {
+    st.log.push(me.name+' is ready.');
   }
   return {ok:true};
 }
@@ -1244,7 +1248,7 @@ function pointsTableHtml(){
 function rulesHtml(){
   return '<p><b>Goal:</b> finish with the <b>lowest</b> total. '+pointsTableHtml()+'</p>'+
   '<ul style="margin:8px 0 8px 18px">'+
-  '<li><b>Start:</b> 4 cards face-down each. Peek at any <b>2 of your own</b> once, then press Done.</li>'+
+  '<li><b>Start:</b> 4 cards face-down each. Peek at any <b>2 of your own</b> once, then tap <b>I\'m Ready</b> — everyone peeks and readies at the same time.</li>'+
   '<li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down. A small gold dot marks cards you have seen.</li>'+
   '<li><b>Your turn:</b> draw the top card, look at it. <b>Swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b>. One discard per turn.</li>'+
   '<li><b>Effects — ONLY on a normal turn discard</b> (drawn card discarded, or swapped-out table card). Exactly one effect per turn discard: <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player\'s, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at BOTH cards, then <b>choose</b> whether to swap them (Swap / Keep as they are). The effect must resolve before the turn passes.</li>'+
@@ -1291,7 +1295,7 @@ function broadcastViews(){
     // connection at game start), not the raw connection id — with the
     // connection id, filteredView finds no player and every card renders
     // unseen (no gold dots on cards the guest has peeked at).
-    if(c&&c.open){ try{ const v=filteredView(fullState, (c.gameId||cid)); if(lastAnim) v.anim=lastAnim; c.send({t:'view', view:v, hash:stateFingerprint(fullState)}); }catch(e){} }
+    if(c&&c.open){ try{ const v=filteredView(fullState, (c.gameId||cid)); if(lastAnim) v.anim=lastAnim; c.send({t:'view', view:v, hash:stateFingerprint(fullState), yourId:(c.gameId||cid)}); }catch(e){} }
   }
 }
 function sendToHost(obj){ try{ if(conn&&conn.open) conn.send(obj); }catch(e){} }
@@ -1300,7 +1304,12 @@ function doLocalAction(action){
   const res=applyAction(fullState, myId, action);
   if(res&&res.ok){ noteAction(action, res, myId); afterAction(res, action); }
   else if(res&&!res.ok){ toast(res.error); }
-  refreshView(); render(); scheduleBots();
+  // BUG FIX (Nov 21, found by the two-browser test): a local action must
+  // reach the guests too. This used to call refreshView()+render() only,
+  // so in a 2-human online game the guest NEVER saw the host's moves —
+  // their view froze at game start (only their own action acks arrived).
+  // broadcastOrRefresh() broadcasts when online+host, else refreshes.
+  broadcastOrRefresh(); scheduleBots();
   return res;
 }
 function afterAction(res, action){
@@ -1402,7 +1411,12 @@ function render(){
   } else if(isSpec){
     status='👀 Spectating — you join as a player from the next round.';
   } else if(view.phase==='peek'){
-    status= me.peekDone ? 'Waiting for everyone to finish peeking…' : '👀 Peek phase — click 2 of your own cards to look at them, then press Done.';
+    // Ready system: everyone peeks and readies at the same time, in no
+    // particular order. The status names who is still getting ready.
+    const waiting=view.players.filter(p=>!p.peekDone).map(p=>p.name);
+    status= me.peekDone
+      ? '✅ You\'re ready — waiting for: '+(waiting.length?waiting.join(', '):'everyone…')
+      : '👀 Peek at 2 of your cards, then tap I\'m Ready. Waiting for: '+(waiting.length?waiting.join(', '):'everyone…');
   } else if(view.pendingEffect){
     const by=view.players.find(p=>p.id===view.pendingEffect.by);
     status=(view.pendingEffect.by===myId?'Your '+view.pendingEffect.rank+' effect — resolve it below.':(by?by.name:'Someone')+' is resolving a '+view.pendingEffect.rank+' effect…');
@@ -1444,7 +1458,7 @@ function render(){
     const active=p.id===view.turnPlayerId&&view.phase!=='peek';
     const isCaller=view.wellington.calledBy===p.id;
     d.className='seat'+(active?' active':'')+(isCaller?' caller':'');
-    d.innerHTML='<div class="sname">'+esc(p.name)+(p.isBot?' 🤖':'')+' <span class="tag2">'+(isCaller?'🏆 called WELLINGTON — protected':(active?'• to move':''))+' • '+p.cards.length+' card'+(p.cards.length===1?'':'s')+'</span></div>'+
+    d.innerHTML='<div class="sname">'+esc(p.name)+(p.isBot?' 🤖':'')+' <span class="tag2">'+(isCaller?'🏆 called WELLINGTON — protected':(active?'• to move':''))+(view.phase==='peek'?(p.peekDone?' ✓ Ready':' …peeking'):'')+' • '+p.cards.length+' card'+(p.cards.length===1?'':'s')+'</span></div>'+
       '<div class="scards" data-pid="'+p.id+'">'+p.cards.map((c,i)=>'<span data-pid="'+p.id+'" data-slot="'+i+'"'+(((targetStep||snapWindowOpen)&&!isCaller)?' class="pickable"':'')+'>'+miniCardHtml(c, transientCardFor(p.id,i))+'</span>').join('')+'</div>';
     oppBox.appendChild(d);
   });
@@ -1468,7 +1482,7 @@ function render(){
   const myPickStep=!!(peff&&peff.by===myId&&!peff.awaitingDecision&&((peff.kind==='peekOwn')||((peff.kind==='swapBlind'||peff.kind==='swapSeen')&&!peff.hasOwn)));
   const oppPickStep=!!(peff&&peff.by===myId&&!peff.awaitingDecision&&((peff.kind==='swapBlind'||peff.kind==='swapSeen')&&peff.hasOwn));
   md.className='seat'+(isMyTurn?' active':'')+(view.wellington.calledBy===myId?' caller':'')+(oppPickStep?' dimmed':'');
-  md.innerHTML='<div class="sname">'+esc(me.name)+' (you) <span class="tag2">'+(view.wellington.calledBy===myId?'🏆 you called WELLINGTON — your cards are protected':(isMyTurn?'• your turn':''))+' • '+me.cards.length+' card'+(me.cards.length===1?'':'s')+'</span></div><div class="scards" id="myCards"></div>';
+  md.innerHTML='<div class="sname">'+esc(me.name)+' (you) <span class="tag2">'+(view.wellington.calledBy===myId?'🏆 you called WELLINGTON — your cards are protected':(isMyTurn?'• your turn':''))+(view.phase==='peek'?(me.peekDone?' ✓ Ready':' …peeking'):'')+' • '+me.cards.length+' card'+(me.cards.length===1?'':'s')+'</span></div><div class="scards" id="myCards"></div>';
   myBox.appendChild(md);
   const myCards=$('myCards');
   me.cards.forEach((c,i)=>{
@@ -1491,11 +1505,13 @@ function render(){
   const canCall=view.phase==='play'&&isMyTurn&&!view.wellington.calledBy;
   wbtn.disabled=!canCall;
   wbtn.textContent=view.wellington.calledBy?('🏆 WELLINGTON called by '+(view.players.find(p=>p.id===view.wellington.calledBy)||{}).name):'🏆 WELLINGTON';
-  // peek done button — never for spectators (they are not players).
-  // After you peek it blinks and the page scrolls to it, once per peek
-  // (when the reveal modal is closed), never on every render.
-  show('btnPeekDone', !isSpec&&view.phase==='peek'&&!me.peekDone);
-  $('btnPeekDone').textContent= me.peekedCount>=2 ? 'Done peeking — start game' : ('Done peeking ('+me.peekedCount+'/2 seen)');
+  // Ready button — uses the strict seat lookup (never the players[0]
+  // fallback: if myId were wrong, the button would mirror the wrong
+  // player's state). Label is "I'm Ready" — the peek phase is the Ready
+  // system: peek 2 cards (or none) and tap Ready whenever you're set.
+  const meStrict=view.players.find(p=>p.id===myId);
+  show('btnPeekDone', !isSpec&&view.phase==='peek'&&!!meStrict&&!meStrict.peekDone);
+  $('btnPeekDone').textContent= '✅ I\'m Ready'+(me.peekedCount>0?' ('+me.peekedCount+'/2 seen)':'');
   const peekBtn=$('btnPeekDone');
   if(view.phase==='peek'&&!me.peekDone&&me.peekedCount>0){
     peekBtn.classList.add('attention');
@@ -1549,8 +1565,9 @@ function onMyCard(slot){
   if(!view) return;
   if(view.phase==='peek'){
     const me=view.players.find(p=>p.id===myId);
+    if(!me) return; // seat not assigned yet — never throw on a click
     if(me.peekDone) return;
-    if(me.peekedCount>=2){ toast('You already peeked at 2 — press Done.'); return; }
+    if(me.peekedCount>=2){ toast('You already peeked at 2 — tap I\'m Ready.'); return; }
     if(playMode==='online'&&!isHost){ sendToHost({t:'action', action:{type:'peek', slot}}); return; }
     doLocalAction({type:'peek', slot}); // reveal modal comes from the result
     return;
@@ -1595,7 +1612,7 @@ function onOpponentCard(pid, slot){
 }
 $('drawPile').addEventListener('click',()=>{
   if(!view) return;
-  if(view.phase==='peek'){ toast('Still peeking — press Done when everyone has looked at their cards.'); return; }
+  if(view.phase==='peek'){ toast('Still peeking — tap I\'m Ready when everyone has looked at their cards.'); return; }
   if(view.turnPlayerId!==myId){ toast('Not your turn.'); return; }
   if(view.phase==='play'||view.phase==='final') submitAction({type:'draw'});
 });
@@ -2088,7 +2105,7 @@ function handleHostMsg(cid, msg){
       try{
         conns[cid].send({t:'welcome', yourId:cid, code:roomCode});
         conns[cid].send({t:'seat', yourId:d.seatId});
-        if(fullState) conns[cid].send({t:'view', view:filteredView(fullState,d.seatId), hash:stateFingerprint(fullState)});
+        if(fullState) conns[cid].send({t:'view', view:filteredView(fullState,d.seatId), hash:stateFingerprint(fullState), yourId:d.seatId});
       }catch(e){}
       if(fullState) fullState.log.push(d.name+' reconnected and resumed their seat.');
       broadcastViews(); renderLobby();
@@ -2101,7 +2118,7 @@ function handleHostMsg(cid, msg){
       try{
         conns[cid].send({t:'welcome', yourId:cid, code:roomCode});
         conns[cid].send({t:'spectating', code:roomCode});
-        conns[cid].send({t:'view', view:filteredView(fullState,cid), hash:stateFingerprint(fullState)});
+        conns[cid].send({t:'view', view:filteredView(fullState,cid), hash:stateFingerprint(fullState), yourId:cid});
       }catch(e){}
       fullState.log.push((msg.name||'Player')+' joined to spectate — they play from the next round.');
       broadcastViews();
@@ -2129,28 +2146,28 @@ function handleHostMsg(cid, msg){
     if(res&&res.ok){
       noteAction(msg.action, res, seatId);
       // Host replies with the actor's fresh filtered view (ack) + broadcasts to all.
-      try{ const ackView=filteredView(fullState, seatId); if(lastAnim) ackView.anim=lastAnim; conns[cid].send({t:'view', view:ackView, hash:stateFingerprint(fullState), ack:true, result:res}); }catch(e){}
+      try{ const ackView=filteredView(fullState, seatId); if(lastAnim) ackView.anim=lastAnim; conns[cid].send({t:'view', view:ackView, hash:stateFingerprint(fullState), ack:true, result:res, yourId:seatId}); }catch(e){}
       broadcastViews(); scheduleBots();
     } else {
       try{ conns[cid].send({t:'action-error', error:res?res.error:'invalid action'}); }catch(e){}
     }
   } else if(msg.t==='hello'){
     const seatId=(conns[cid]&&conns[cid].gameId)||cid;
-    if(fullState){ try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState)}); }catch(e){} }
+    if(fullState){ try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState), yourId:seatId}); }catch(e){} }
   } else if(msg.t==='need-sync'){
     const seatId=(conns[cid]&&conns[cid].gameId)||cid;
-    if(fullState){ try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState)}); }catch(e){} }
+    if(fullState){ try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState), yourId:seatId}); }catch(e){} }
   } else if(msg.t==='ping'){
     const seatId=(conns[cid]&&conns[cid].gameId)||cid;
-    if(fullState&&msg.hash!==stateFingerprint(fullState)){ try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState)}); }catch(e){} }
+    if(fullState&&msg.hash!==stateFingerprint(fullState)){ try{ conns[cid].send({t:'view', view:filteredView(fullState, seatId), hash:stateFingerprint(fullState), yourId:seatId}); }catch(e){} }
   } else if(msg.t==='rematch-request'){
     startHostedGame();
   }
 }
 function handleGuestMsg(msg){
   if(!msg||typeof msg!=='object') return;
-  if(msg.t==='welcome'){ myId=msg.yourId; stateReceived=false; startHelloLoop(); if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; } }
-  else if(msg.t==='seat'){ myId=msg.yourId; isSpectator=false; }
+  if(msg.t==='welcome'){ myId=msg.yourId; playMode='online'; stateReceived=false; startHelloLoop(); if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; } }
+  else if(msg.t==='seat'){ myId=msg.yourId; playMode='online'; isSpectator=false; }
   else if(msg.t==='spectating'){ isSpectator=true; if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; } }
   else if(msg.t==='join-rejected'){
     setMenuMsg('Could not join: '+(msg.error||'room is full.'));
@@ -2167,6 +2184,13 @@ function handleGuestMsg(msg){
   }
   else if(msg.t==='view'){
     view=msg.view; stateReceived=true;
+    playMode='online'; // views only ever come from a host — this is what
+    // makes the guest's actions route to the host instead of the (absent)
+    // local state. (BUG FIX Nov 21: guests never set playMode, so every
+    // guest action silently fell through to doLocalAction and vanished.)
+    if(msg.yourId!==undefined&&msg.yourId!==null) myId=msg.yourId; // the
+    // host stamps every view with the receiver's seat id, so even if the
+    // one-off 'seat' message is lost, the next view restores it.
     if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
     if(view.players.some(p=>p.id===myId)) isSpectator=false;
     show('menuScreen',false); show('lobbyScreen',false); show('gameScreen',true);
@@ -2228,7 +2252,7 @@ function startHostedGame(){
   // Tell every guest their seat id, then broadcast views.
   for(const cid of Object.keys(conns)){
     if(!idMap[cid]) continue; // a spectator who didn't fit this round: no seat
-    try{ conns[cid].send({t:'seat', yourId:idMap[cid]}); conns[cid].send({t:'view', view:filteredView(fullState, idMap[cid]), hash:stateFingerprint(fullState)}); }catch(e){}
+    try{ conns[cid].send({t:'seat', yourId:idMap[cid]}); conns[cid].send({t:'view', view:filteredView(fullState, idMap[cid]), hash:stateFingerprint(fullState), yourId:idMap[cid]}); }catch(e){}
   }
   broadcastViews(); startHeartbeat(); scheduleBots();
 }
