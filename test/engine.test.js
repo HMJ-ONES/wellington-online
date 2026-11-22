@@ -699,12 +699,21 @@ console.log('Bot pace + UI render rules (UI script block):');
     // ✕ buttons: Rules modal (top-left) and the SNAP tip banner (top)
     check('Rules modal has a top-left ✕ that closes it', /id="rulesCloseX"/.test(html) && /class="modal-x"/.test(html) && /\$\('rulesCloseX'\)\.onclick=\(\)=>show\('rulesModal',false\)/.test(uiSrc));
     check('Rules points table reads CARD_POINTS (cannot go stale)', /function pointsTableHtml/.test(uiSrc) && /CARD_POINTS\['J'\]/.test(uiSrc) && /CARD_POINTS\['Joker'\]/.test(uiSrc) && /CARD_POINTS\['K'\]/.test(uiSrc) && /CARD_POINTS\['A'\]/.test(uiSrc));
-    // Cross-player snap UI: any player's card is clickable in the window,
-    // and a wrong snap reveals the card on its OWNER's seat.
-    check('opponent card click during snap window submits a cross-player snap', /function onOpponentCard/.test(uiSrc) && /snapWindow&&view\.snapWindow\.open/.test(uiSrc.split('function onOpponentCard')[1]) && /targetPlayerId:pid, slot/.test(uiSrc.split('function onOpponentCard')[1]));
+    // Drag-to-snap (Nov 21): snapping is drag-only — a click never snaps,
+    // so a stray tap can't cost a penalty card. The drag submits the same
+    // cross-player snap action the click used to.
+    const fnBody = (src, name) => { const p = src.split('function ' + name); if (p.length < 2) return ''; return p[1].split('\nfunction ')[0]; };
+    check('snapping is drag-only: onMyCard has no snap submit', !/type:'snap'/.test(fnBody(uiSrc, 'onMyCard')));
+    check('snapping is drag-only: onOpponentCard has no snap submit', !/type:'snap'/.test(fnBody(uiSrc, 'onOpponentCard')));
+    check('snap drag wires pointerdown on draggable cards', /startSnapDrag\(/.test(uiSrc) && /addEventListener\('pointerdown'/.test(uiSrc));
+    check('snap drag drops on the middle (discard pile zone)', /function snapDropZone/.test(uiSrc) && /drop-ready/.test(uiSrc) && /getBoundingClientRect/.test(fnBody(uiSrc, 'snapDropZone')));
+    check('snap drag ghost follows the pointer', /drag-ghost/.test(uiSrc) && /translate\(/.test(fnBody(uiSrc, 'startSnapDrag')));
+    check('a tap never snaps (movement threshold)', /Math\.hypot\(ev\.clientX-snapDrag\.startX/.test(uiSrc));
+    check('trailing click after a drag is ignored', /lastDragEnd/.test(uiSrc) && /Date\.now\(\)-lastDragEnd<250/.test(uiSrc));
+    check('snap banner tells players to drag', /hold and drag a matching card to the middle/.test(uiSrc));
     check('wrong-snap reveal lands on the target player\'s seat', /res\.targetPlayerId\|\|myId/.test(uiSrc) && /'Wrong snap!'/.test(uiSrc));
     check('snap window marks every player\'s cards pickable (not the caller\'s)', /snapWindowOpen/.test(uiSrc) && /snapWindowOpen\)&&!isCaller/.test(uiSrc));
-    check('snap banner says any player\'s card can be snapped', /any player/.test(uiSrc) && /ANY player/.test(uiSrc));
+    check('snap banner says any player\'s card can be snapped', /hold and drag a matching card to the middle \(yours or ANY player/.test(uiSrc));
     // Host broadcasts must build each guest's view for their SEAT id, not
     // the raw connection id — otherwise filteredView finds no player and
     // every card renders unseen for guests (no gold dots on peeked cards).

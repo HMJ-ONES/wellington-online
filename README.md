@@ -37,7 +37,7 @@ The values live in one easily-editable const at the top of the engine in `index.
    - **8** — exchange 1 of your cards with 1 of another player's, looking at **both** first — then you choose **Swap** or **Keep as they are**. Declining ends the effect with no swap (the look still counts as the effect used). The pair is always exactly one of your cards + one opponent's card — you can never look at two of your own cards with an 8.
    
    The effect must resolve before the turn passes.
-4. **Snap!** Whenever a card lands in the middle, **any** player may discard a card of the **same rank** — from their own table **or from any other player's table** — at any moment before the next card lands in the middle. Click a card (yours or anyone else's) while the SNAP banner is showing. If you hold two of that rank, you may snap **twice in a row** in the same window. Snapping someone's **last** card ends the game at once — they win with 0. The Wellington caller's cards are protected: nobody may snap them in the final round.
+4. **Snap!** Whenever a card lands in the middle, **any** player may discard a card of the **same rank** — from their own table **or from any other player's table** — at any moment before the next card lands in the middle. **Hold and drag** a matching card to the middle to snap — clicking never snaps, so a stray tap can't cost you a penalty card. If you hold two of that rank, you may snap **twice in a row** in the same window. Snapping someone's **last** card ends the game at once — they win with 0. The Wellington caller's cards are protected: nobody may snap them in the final round.
 
    **Snapped cards never trigger effects** — not even a snapped 5, 6, 7 or 8. Snaps are effect-free discards only.
 

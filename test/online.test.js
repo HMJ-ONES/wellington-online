@@ -110,13 +110,48 @@ const evalIn = (dom, expr) => dom.window.eval(expr);
   check('game starts once everyone is ready', evalIn(host, 'fullState.phase') === 'play' && evalIn(guest, 'view.phase') === 'play');
 
   // The guest can play, not just peek: it is the host's turn first, so
-  // wait for the host to draw+discard, then the guest draws.
+  // wait for the host to draw+discard, then the guest draws. The deck top
+  // is rigged to a plain 9 (then a plain 3) so the discards trigger no
+  // effect — otherwise the turn would stay put for the effect and the
+  // turn checks below would be luck of the draw.
+  evalIn(host, `(()=>{ fullState.deck[fullState.deck.length-1]={id:'9♠', rank:'9', suit:'♠'}; return true; })()`);
   el(host, 'drawPile').click(); await sleep(300);
   check('host draws (guest sees the drawn phase)', evalIn(guest, 'view.phase') === 'drawn');
   click(host, 'btnDiscardDrawn'); await sleep(300);
   check('turn passes to the guest', evalIn(guest, 'view.turnPlayerId') === 'p1');
+  evalIn(host, `(()=>{ fullState.deck[fullState.deck.length-1]={id:'3♠', rank:'3', suit:'♠'}; return true; })()`);
   el(guest, 'drawPile').click(); await sleep(300);
   check('guest draw reaches the host', evalIn(host, 'fullState.phase') === 'drawn' && evalIn(host, 'fullState.drawnBy') === 'p1');
+
+  // Drag-to-snap (Nov 21): the guest discards, then a matching card is
+  // rigged into their hand. A click on it must NOT snap; dragging it to
+  // the middle must; dropping it elsewhere must cancel.
+  click(guest, 'btnDiscardDrawn'); await sleep(300);
+  const topRank = evalIn(host, `(()=>{ const top=fullState.discard[fullState.discard.length-1]; const suit=['♠','♥','♦','♣'].find(s=>s!==top.suit); fullState.players[1].cards[0]={id:top.rank+suit, rank:top.rank, suit}; broadcastViews(); return top.rank; })()`);
+  await sleep(200);
+  check('rigged a matching card for the guest', typeof topRank === 'string' && evalIn(guest, 'view.players.find(p=>p.id===myId).cards.length') === 4);
+  const stubMiddle = () => { el(guest, 'discardPile').getBoundingClientRect = () => ({ left: 100, top: 100, right: 200, bottom: 200, width: 100, height: 100, x: 100, y: 100 }); };
+  const PE = (type, x, y) => new guest.window.MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
+  const discBefore = evalIn(host, 'fullState.discard.length');
+  // A plain click on the matching card snaps nothing.
+  el(guest, 'myCards').children[0].click(); await sleep(200);
+  check('clicking a matching card does NOT snap', evalIn(host, 'fullState.players[1].cards.length') === 4 && evalIn(host, 'fullState.discard.length') === discBefore);
+  // Drag it onto the middle: pointerdown on the card, move into the
+  // discard-pile zone, release.
+  stubMiddle();
+  el(guest, 'myCards').children[0].dispatchEvent(PE('pointerdown', 50, 500));
+  guest.window.document.dispatchEvent(PE('pointermove', 150, 150));
+  guest.window.document.dispatchEvent(PE('pointerup', 150, 150));
+  await sleep(300);
+  check('dragging a matching card to the middle snaps it', evalIn(host, 'fullState.players[1].cards.length') === 3 && evalIn(host, 'fullState.discard.length') === discBefore + 1 && evalIn(host, 'fullState.discard[fullState.discard.length-1].rank') === topRank);
+  // Dropping a card outside the middle cancels — nothing happens.
+  stubMiddle();
+  const discAfterSnap = evalIn(host, 'fullState.discard.length');
+  el(guest, 'myCards').children[0].dispatchEvent(PE('pointerdown', 50, 500));
+  guest.window.document.dispatchEvent(PE('pointermove', 60, 520));
+  guest.window.document.dispatchEvent(PE('pointerup', 60, 520));
+  await sleep(200);
+  check('dropping a card outside the middle cancels the snap', evalIn(host, 'fullState.players[1].cards.length') === 3 && evalIn(host, 'fullState.discard.length') === discAfterSnap);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

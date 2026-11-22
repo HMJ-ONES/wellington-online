@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Wellington Online v1.6 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
+<!-- Wellington Online v1.7 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -71,6 +71,15 @@ table.points th{color:var(--gold)}
 .slot-glow-b{outline:4px solid #4cc9f0!important;box-shadow:0 0 16px rgba(76,201,240,.85)}
 span.pickable>.mini-card{outline:3px dashed var(--gold);cursor:pointer}
 .card-big.pickable{outline:3px dashed var(--gold);cursor:pointer}
+/* Drag-to-snap: snap candidates show a grab cursor (mouse + touch) and
+   never scroll the page mid-drag. The ghost follows the pointer; the
+   middle glows while a drag hovers over it. */
+.card-big.snapdrag{cursor:grab;touch-action:none}
+span.snapdrag>.mini-card{cursor:grab;touch-action:none}
+.snapdrag:active{cursor:grabbing}
+span.snapdrag:active>.mini-card{cursor:grabbing}
+.drag-ghost{position:fixed;left:0;top:0;z-index:200;pointer-events:none;opacity:.92;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}
+#discardPile.drop-ready{outline:3px solid var(--gold);outline-offset:3px}
 .seat.dimmed{opacity:.6}
 .card-look{animation:lookwiggle .65s ease}
 @keyframes lookwiggle{0%{transform:translateY(0) rotate(0)}30%{transform:translateY(-9px) rotate(-4deg)}60%{transform:translateY(-4px) rotate(3deg)}100%{transform:translateY(0) rotate(0)}}
@@ -183,7 +192,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
       <li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down. A small gold dot marks cards you have seen.</li>
       <li><b>Your turn:</b> draw the top card and look at it. Either <b>swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b> face-up. Exactly one discard per turn.</li>
       <li><b>Card effects</b> trigger ONLY on a normal turn discard (the drawn card you discard, or the table card you swap out): <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player's, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at both cards, then <b>choose</b> whether to swap them. Exactly one effect per turn discard. <b>Snapped cards never trigger effects</b> — not even a snapped 5, 6, 7 or 8.</li>
-      <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player's</b> — before the next card lands there. If you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Snapping someone's <b>last</b> card ends the game at once — they win with 0. The Wellington caller's cards are protected in the final round. Wrong rank? That card is shown, <b>goes back to its owner</b>, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on (so if you had 4 cards, you now have 5). <b>Advanced:</b> when setting up a room (or a bot game) you can turn <b>Snap tips</b> off — no banner at the top, just watch the middle yourself. Snapping still works exactly the same.</li>
+      <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player's</b> — before the next card lands there. Hold and <b>drag</b> a matching card to the middle to snap (clicking never snaps, so a stray tap can't cost you a penalty card). If you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Snapping someone's <b>last</b> card ends the game at once — they win with 0. The Wellington caller's cards are protected in the final round. Wrong rank? That card is shown, <b>goes back to its owner</b>, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on (so if you had 4 cards, you now have 5). <b>Advanced:</b> when setting up a room (or a bot game) you can turn <b>Snap tips</b> off — no banner at the top, just watch the middle yourself. Snapping still works exactly the same.</li>
       <li><b>WELLINGTON:</b> on your turn, before drawing, hit the big button when you think you're lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game — and nobody may touch the caller's cards during the final round.</li>
       <li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile.</li>
       <li><b>Joining late?</b> If you join a game that's already in progress, you <b>spectate</b> — you see the table but every card stays face-down, and you join as a player from the next round. If your connection drops mid-game, you have <b>10 seconds</b> to reconnect and keep your seat; after that your cards go back into the draw pile and you spectate.</li>
@@ -248,7 +257,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   </div>
 </div>
 
-<footer>Wellington Online v1.6 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
+<footer>Wellington Online v1.7 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
 Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, nothing to sign up for. The host holds the true game state; each player only ever sees their own cards.</footer>
 </div>
 
@@ -1253,7 +1262,7 @@ function rulesHtml(){
   '<li><b>Your turn:</b> draw the top card, look at it. <b>Swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b>. One discard per turn.</li>'+
   '<li><b>Effects — ONLY on a normal turn discard</b> (drawn card discarded, or swapped-out table card). Exactly one effect per turn discard: <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player\'s, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at BOTH cards, then <b>choose</b> whether to swap them (Swap / Keep as they are). The effect must resolve before the turn passes.</li>'+
   '<li><b>Snaps NEVER trigger effects.</b> A snapped 5, 6, 7 or 8 is an effect-free discard — no peek, no swap.</li>'+
-  '<li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player\'s</b> — before the next card lands there. Holding two of that rank? Snap <b>twice in a row</b> in the same window. Click a card (yours or anyone else\'s) while the SNAP banner is showing to try. Wrong rank? The card is shown, goes back to its owner, and you draw a <b>penalty card</b> (so 4 cards become 5). <b>Advanced:</b> the room setup can turn <b>Snap tips</b> off — no banner, just watch the middle yourself.</li>'+
+  '<li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player\'s</b> — before the next card lands there. Holding two of that rank? Snap <b>twice in a row</b> in the same window. Hold and <b>drag</b> a card (yours or anyone else\'s) to the middle to try — clicking never snaps. Wrong rank? The card is shown, goes back to its owner, and you draw a <b>penalty card</b> (so 4 cards become 5). <b>Advanced:</b> the room setup can turn <b>Snap tips</b> off — no banner, just watch the middle yourself.</li>'+
   '<li><b>Wrong snap:</b> the card is shown, goes back to its slot, and you must take a <b>penalty card</b> (extra face-down card). You <b>cannot discard it right away</b> — not by snapping it, not by swapping it out, not by a 7/8 swap. From your <b>next turn on</b> it is a normal card: swap it out or snap it like any other.</li>'+
   '<li><b>WELLINGTON:</b> on your turn, <b>before drawing</b>, hit the big button when you think you\'re lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game. During the final round <b>nobody may touch the caller\'s cards</b> (no 6/7/8 on them) — but 5/6/7/8 may still be used on other players.</li>'+
   '<li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile. If deck and discard are both exhausted, the game ends and cards are revealed.</li>'+
@@ -1265,7 +1274,7 @@ function openRules(){ $('rulesBody').innerHTML=rulesHtml(); show('rulesModal',tr
 $('btnRules').onclick=openRules; $('btnRules2').onclick=openRules;
 $('rulesClose').onclick=()=>show('rulesModal',false);
 $('rulesCloseX').onclick=()=>show('rulesModal',false);
-$('snapBannerX').onclick=()=>{ snapTipsDismissed=true; show('snapBanner',false); toast('Snap tips off for this game — you can still snap by watching the middle.'); };
+$('snapBannerX').onclick=()=>{ snapTipsDismissed=true; show('snapBanner',false); toast('Snap tips off for this game — you can still snap by dragging a matching card to the middle.'); };
 $('revealClose').onclick=()=>closeReveal();
 
 /* ---------- local / host game bootstrap ---------- */
@@ -1441,7 +1450,7 @@ function render(){
   const banner=$('snapBanner');
   if(snapOpen){
     banner.classList.remove('hidden');
-    $('snapBannerText').textContent='⚡ SNAP! Top of the middle is '+view.snapWindow.topRank+' — click a matching card (yours or ANY player\'s) if you know one is a '+view.snapWindow.topRank+' (you may snap more than once in this window). Snaps never trigger effects.';
+    $('snapBannerText').textContent='⚡ SNAP! Top of the middle is '+view.snapWindow.topRank+' — hold and drag a matching card to the middle (yours or ANY player\'s) if you know one is a '+view.snapWindow.topRank+' (you may snap more than once in this window). Snaps never trigger effects.';
   } else banner.classList.add('hidden');
   // opponents
   const oppBox=$('opponentsBox'); oppBox.innerHTML='';
@@ -1459,12 +1468,20 @@ function render(){
     const isCaller=view.wellington.calledBy===p.id;
     d.className='seat'+(active?' active':'')+(isCaller?' caller':'');
     d.innerHTML='<div class="sname">'+esc(p.name)+(p.isBot?' 🤖':'')+' <span class="tag2">'+(isCaller?'🏆 called WELLINGTON — protected':(active?'• to move':''))+(view.phase==='peek'?(p.peekDone?' ✓ Ready':' …peeking'):'')+' • '+p.cards.length+' card'+(p.cards.length===1?'':'s')+'</span></div>'+
-      '<div class="scards" data-pid="'+p.id+'">'+p.cards.map((c,i)=>'<span data-pid="'+p.id+'" data-slot="'+i+'"'+(((targetStep||snapWindowOpen)&&!isCaller)?' class="pickable"':'')+'>'+miniCardHtml(c, transientCardFor(p.id,i))+'</span>').join('')+'</div>';
+      '<div class="scards" data-pid="'+p.id+'">'+p.cards.map((c,i)=>{
+        // pickable = a valid click target (effect pick or snap candidate);
+        // snapdrag = also draggable to the middle to snap (never the
+        // caller's cards, never a locked card, never during my own effect).
+        let cls=((targetStep||snapWindowOpen)&&!isCaller)?'pickable':'';
+        if(snapWindowOpen&&!isCaller&&!c.locked&&!(peff&&peff.by===myId)) cls+=(cls?' ':'')+'snapdrag';
+        return '<span data-pid="'+p.id+'" data-slot="'+i+'"'+(cls?' class="'+cls+'"':'')+'>'+miniCardHtml(c, transientCardFor(p.id,i))+'</span>';
+      }).join('')+'</div>';
     oppBox.appendChild(d);
   });
-  // bind opponent card clicks (effect targets)
+  // bind opponent card clicks (effect targets) and snap drags
   oppBox.querySelectorAll('[data-slot]').forEach(el=>{
     el.addEventListener('click',()=>onOpponentCard(el.getAttribute('data-pid'), parseInt(el.getAttribute('data-slot'),10)));
+    if(el.classList.contains('snapdrag')) el.addEventListener('pointerdown',e=>startSnapDrag(el.getAttribute('data-pid'), parseInt(el.getAttribute('data-slot'),10), el, e));
   });
   // centre piles
   $('deckCount').textContent=view.deckCount+' left';
@@ -1487,9 +1504,11 @@ function render(){
   const myCards=$('myCards');
   me.cards.forEach((c,i)=>{
     const holder=document.createElement('span');
-    holder.innerHTML=cardHtml(c, (myPickStep||(snapWindowOpen&&!(peff&&peff.by===myId)))?'pickable':'', '', transientCardFor(myId,i));
+    const dragCls=snapDraggable(myId,i)?' snapdrag':'';
+    holder.innerHTML=cardHtml(c, ((myPickStep||(snapWindowOpen&&!(peff&&peff.by===myId)))?'pickable':'')+dragCls, '', transientCardFor(myId,i));
     const el=holder.firstChild;
     el.addEventListener('click',()=>onMyCard(i));
+    if(dragCls) el.addEventListener('pointerdown',e=>startSnapDrag(myId, i, el, e));
     myCards.appendChild(el);
   });
   } // end non-spectator seat
@@ -1556,6 +1575,70 @@ function hideOver(){ show('overModal',false); }
 
 /* ---------- clicks: route through applyAction (local/host) or the host (guest) ---------- */
 function amSpectator(){ return isSpectator || (view && !view.players.some(p=>p.id===myId)); }
+/* ---------- drag-to-snap: snapping is drag-only, never a click ----------
+   A wrong snap costs a penalty card, so a stray click is expensive. To
+   snap, press and hold a card and drag it onto the middle (the discard
+   pile). A tap/click never snaps. Works with mouse and touch (pointer
+   events); the ghost follows the pointer and the middle glows while a
+   drag hovers over it. */
+let snapDrag=null;    // {playerId, slot, ghost, startX, startY, moved}
+let lastDragEnd=0;    // a real drag just ended — ignore its trailing click
+let lastSnapHint=0;   // throttle for the "drag to snap" hint toast
+function snapDraggable(playerId, slot){
+  if(!view||!view.snapWindow||!view.snapWindow.open) return false;
+  if(view.phase==='peek'||view.phase==='over') return false;
+  if(amSpectator()) return false;
+  if(view.wellington.calledBy===playerId) return false; // caller's cards are protected
+  const peff=view.pendingEffect;
+  if(peff&&peff.by===myId) return false; // my effect owns my clicks right now
+  const p=view.players.find(x=>x.id===playerId);
+  if(!p||!p.cards[slot]) return false;
+  if(p.cards[slot].locked) return false; // a locked penalty card can't snap
+  return true;
+}
+function snapDropZone(){
+  const dp=$('discardPile'); if(!dp) return null;
+  const r=dp.getBoundingClientRect(); const m=24;
+  return {left:r.left-m, top:r.top-m, right:r.right+m, bottom:r.bottom+m};
+}
+function pointInZone(x,y,z){ return !!z&&x>=z.left&&x<=z.right&&y>=z.top&&y<=z.bottom; }
+function startSnapDrag(playerId, slot, srcEl, e){
+  if(snapDrag) return; // one drag at a time
+  if(!snapDraggable(playerId, slot)) return;
+  e.preventDefault();
+  const ghost=srcEl.cloneNode(true);
+  ghost.classList.add('drag-ghost');
+  ghost.classList.remove('pickable','snapdrag');
+  document.body.appendChild(ghost);
+  snapDrag={playerId, slot, ghost, startX:e.clientX, startY:e.clientY, moved:false};
+  try{ if(srcEl.setPointerCapture) srcEl.setPointerCapture(e.pointerId); }catch(err){}
+  const move=(ev)=>{
+    if(!snapDrag) return;
+    if(Math.hypot(ev.clientX-snapDrag.startX, ev.clientY-snapDrag.startY)>8) snapDrag.moved=true;
+    snapDrag.ghost.style.transform='translate('+ev.clientX+'px,'+ev.clientY+'px) translate(-50%,-50%)';
+    const dp=$('discardPile');
+    if(dp) dp.classList.toggle('drop-ready', pointInZone(ev.clientX,ev.clientY,snapDropZone()));
+  };
+  const up=(ev)=>{
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    const d=snapDrag; snapDrag=null;
+    if(d) d.ghost.remove();
+    const dp=$('discardPile'); if(dp) dp.classList.remove('drop-ready');
+    if(!d||!d.moved) return; // a tap never snaps — and its click still works
+    lastDragEnd=Date.now(); // ignore the trailing click (e.g. on the draw pile)
+    if(pointInZone(ev.clientX,ev.clientY,snapDropZone())){
+      if(d.playerId===myId) submitAction({type:'snap', slot:d.slot});
+      else submitAction({type:'snap', targetPlayerId:d.playerId, slot:d.slot});
+    }
+    // A drop anywhere else just cancels — the card stays put.
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+  move(e);
+}
 function submitAction(action){
   if(amSpectator()){ toast('You are spectating — you join as a player next round.'); return; }
   if(playMode==='online'&&!isHost){ sendToHost({t:'action', action}); return; }
@@ -1563,6 +1646,7 @@ function submitAction(action){
 }
 function onMyCard(slot){
   if(!view) return;
+  if(Date.now()-lastDragEnd<250) return; // a drag just ended — ignore its trailing click
   if(view.phase==='peek'){
     const me=view.players.find(p=>p.id===myId);
     if(!me) return; // seat not assigned yet — never throw on a click
@@ -1589,29 +1673,26 @@ function onMyCard(slot){
   if(view.phase==='drawn'&&view.turnPlayerId===myId){
     submitAction({type:'swap', slot}); return; // blind swap — you do NOT see the card you swap out
   }
-  // Snap window: clicking your own card attempts a snap (any phase except peek/over).
-  if(view.snapWindow&&view.snapWindow.open){
-    submitAction({type:'snap', slot}); return;
-  }
-  toast(view.turnPlayerId===myId?'Draw a card first (click the draw pile).':'Not your turn — wait, or snap a matching card from any player\'s table.');
+  // No snap on click: snapping is drag-only (hold the card and drag it
+  // to the middle) so a stray click can never cost a penalty card.
+  toast(view.turnPlayerId===myId?'Draw a card first (click the draw pile).':'Not your turn — wait, or drag a matching card to the middle to snap.');
 }
 function onOpponentCard(pid, slot){
   if(!view) return;
+  if(Date.now()-lastDragEnd<250) return; // a drag just ended — ignore its trailing click
   if(view.pendingEffect&&view.pendingEffect.by===myId){
     const eff=view.pendingEffect;
     if(eff.kind==='peekOther'){ submitAction({type:'effectPeekOther', targetPlayerId:pid, slot}); return; }
     if((eff.kind==='swapBlind'||eff.kind==='swapSeen')&&eff.hasOwn){ submitAction({type:'effectSwapOther', targetPlayerId:pid, slot}); return; }
     if(eff.kind==='swapBlind'||eff.kind==='swapSeen'){ toast('Pick one of YOUR cards first.'); return; }
   }
-  // Snap window: a snap may take the matching card from ANY player's
-  // table — click an opponent's card to try it. Wrong? It goes back to
-  // them and you draw a penalty card.
-  if(view.snapWindow&&view.snapWindow.open){
-    submitAction({type:'snap', targetPlayerId:pid, slot}); return;
-  }
+  // No effect pending: a click on an opponent's card does nothing —
+  // snaps are drag-only (hold the card and drag it to the middle).
+  if(Date.now()-lastSnapHint>5000){ lastSnapHint=Date.now(); toast('To snap, hold and drag a matching card to the middle.'); }
 }
 $('drawPile').addEventListener('click',()=>{
   if(!view) return;
+  if(Date.now()-lastDragEnd<250) return; // a snap drag ending on the draw pile must not draw
   if(view.phase==='peek'){ toast('Still peeking — tap I\'m Ready when everyone has looked at their cards.'); return; }
   if(view.turnPlayerId!==myId){ toast('Not your turn.'); return; }
   if(view.phase==='play'||view.phase==='final') submitAction({type:'draw'});
