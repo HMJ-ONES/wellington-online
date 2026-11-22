@@ -153,6 +153,24 @@ const evalIn = (dom, expr) => dom.window.eval(expr);
   await sleep(200);
   check('dropping a card outside the middle cancels the snap', evalIn(host, 'fullState.players[1].cards.length') === 3 && evalIn(host, 'fullState.discard.length') === discAfterSnap);
 
+  // Cross-player snap choice (owner rule, Nov 22): rig a matching card
+  // into the HOST's hand; the guest drags it to the middle. The snap
+  // opens a choice for the guest — give the host one of their cards, or
+  // let the host draw a new one. The guest picks "draw".
+  const topRank2 = evalIn(host, `(()=>{ const top=fullState.discard[fullState.discard.length-1]; const suit=['♠','♥','♦','♣'].find(s=>s!==top.suit); fullState.players[0].cards[0]={id:top.rank+suit, rank:top.rank, suit}; broadcastViews(); return top.rank; })()`);
+  await sleep(200);
+  stubMiddle();
+  const oppCard = guest.window.document.querySelector('[data-pid="p0"][data-slot="0"]');
+  check('host card is draggable for a cross-player snap', !!oppCard && oppCard.classList.contains('snapdrag'));
+  oppCard.dispatchEvent(PE('pointerdown', 50, 500));
+  guest.window.document.dispatchEvent(PE('pointermove', 150, 150));
+  guest.window.document.dispatchEvent(PE('pointerup', 150, 150));
+  await sleep(300);
+  check('cross-player snap opens the choice for the snapper', evalIn(host, 'fullState.pendingSnapChoice&&fullState.pendingSnapChoice.by') === 'p1' && evalIn(host, 'fullState.pendingSnapChoice&&fullState.pendingSnapChoice.target') === 'p0' && evalIn(host, 'fullState.players[0].cards.length') === 3);
+  check('guest sees the snap choice pop-up', evalIn(guest, '!!view.pendingSnapChoice') === true && visible(guest, 'snapChoiceModal'));
+  click(guest, 'btnSnapDraw'); await sleep(300);
+  check('choice draw: the victim draws a new card', evalIn(host, 'fullState.players[0].cards.length') === 4 && evalIn(host, 'fullState.pendingSnapChoice') === null && evalIn(guest, 'view.pendingSnapChoice') === null);
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

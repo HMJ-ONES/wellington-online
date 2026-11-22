@@ -479,6 +479,135 @@ console.log('Penalty card: locked at once, normal from next turn on (owner corre
   check('player can still finish the turn by discarding the drawn card', r.ok);
 }
 
+console.log('Snap choice (owner rule, Nov 22): snapping ANOTHER player\'s card opens a choice:');
+{
+  // P0 snaps P1's 9. P1 is one card short; P0 must choose: give P1 one of
+  // their cards, or let P1 draw a new one.
+  const st = riggedGame([
+    [['10','♠'],['9','♥'],['2','♦'],['3','♣']],
+    [['9','♦'],['4','♥'],['5','♦'],['6','♣']],
+  ], { discardTop: ['9','♣'], turnIdx: 0, deck: [['7','♥'],['3','♠']] });
+  let r = E.applyAction(st, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  check('cross-player snap opens a choice for the snapper', r.ok && r.correct && st.pendingSnapChoice && st.pendingSnapChoice.by === 'p0' && st.pendingSnapChoice.target === 'p1' && st.pendingSnapChoice.step === 'choose');
+  check('victim is one card short until the choice resolves', st.players[1].cards.length === 3);
+  check('no snap while a choice is pending', !E.applyAction(st, 'p1', { type: 'snap', slot: 0 }).ok);
+  check('only the snapper resolves the choice', !E.applyAction(st, 'p1', { type: 'snapChoice', mode: 'draw' }).ok);
+  check('legalActions offers the choice to the snapper, no snaps while pending',
+    E.legalActions(st, 'p0').some(a => a.type === 'snapChoice' && a.mode === 'draw') &&
+    !E.legalActions(st, 'p0').some(a => a.type === 'snap') &&
+    !E.legalActions(st, 'p1').some(a => a.type === 'snap'));
+  // 'draw': the victim draws a fresh card, choice cleared.
+  r = E.applyAction(st, 'p0', { type: 'snapChoice', mode: 'draw' });
+  check('choice draw: victim draws a new card', r.ok && r.resolved === 'draw' && st.players[1].cards.length === 4 && !st.pendingSnapChoice);
+  check('drawn replacement is face-down and unseen by the victim', st.players[1].known[st.players[1].cards[3].id] !== true);
+  // 'give': first call opens the pick step; 'back' returns to choose;
+  // the slotted call moves the card.
+  const st2 = riggedGame([
+    [['10','♠'],['9','♥'],['2','♦'],['3','♣']],
+    [['9','♦'],['4','♥'],['5','♦'],['6','♣']],
+  ], { discardTop: ['9','♣'], turnIdx: 0, deck: [['7','♥'],['3','♠']] });
+  E.applyAction(st2, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  r = E.applyAction(st2, 'p0', { type: 'snapChoice', mode: 'give' });
+  check('choice give without a slot opens the pick step', r.ok && r.awaitingPick && st2.pendingSnapChoice.step === 'pick');
+  r = E.applyAction(st2, 'p0', { type: 'snapChoice', mode: 'back' });
+  check('choice back returns to the choose step', r.ok && st2.pendingSnapChoice.step === 'choose');
+  E.applyAction(st2, 'p0', { type: 'snapChoice', mode: 'give' });
+  r = E.applyAction(st2, 'p0', { type: 'snapChoice', mode: 'give', slot: 1 }); // P0's 9♥
+  check('choice give moves the picked card to the victim', r.ok && r.resolved === 'give' && !st2.pendingSnapChoice && st2.players[0].cards.length === 3 && st2.players[1].cards.length === 4 && st2.players[1].cards[3].id === '9♥');
+  // A locked penalty card cannot be given away.
+  const st2b = riggedGame([
+    [['10','♠'],['9','♥'],['2','♦'],['3','♣']],
+    [['9','♦'],['4','♥'],['5','♦'],['6','♣']],
+  ], { discardTop: ['9','♣'], turnIdx: 0, deck: [['7','♥'],['3','♠']] });
+  st2b.players[0].cards[0].locked = true;
+  E.applyAction(st2b, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  check('a locked card cannot be given away', !E.applyAction(st2b, 'p0', { type: 'snapChoice', mode: 'give', slot: 0 }).ok);
+  // Giving away your LAST card wins at once (standing 0-card rule).
+  const st3 = riggedGame([
+    [['9','♥']],
+    [['9','♦'],['4','♥'],['5','♦'],['6','♣']],
+  ], { discardTop: ['9','♣'], turnIdx: 0, deck: [['7','♥'],['3','♠']] });
+  E.applyAction(st3, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  r = E.applyAction(st3, 'p0', { type: 'snapChoice', mode: 'give', slot: 0 });
+  check('giving away your last card wins at once', r.ok && r.gameOver && st3.phase === 'over' && st3.winners.join(',') === 'p0');
+  // Snapping the victim's LAST card ends the game at once — no choice.
+  const st4 = riggedGame([
+    [['10','♠'],['9','♥'],['2','♦'],['3','♣']],
+    [['9','♦']],
+  ], { discardTop: ['9','♣'], turnIdx: 0 });
+  r = E.applyAction(st4, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  check('snapping the victim\'s last card ends the game with no choice', r.ok && r.gameOver && st4.phase === 'over' && !st4.pendingSnapChoice && st4.winners.join(',') === 'p1');
+  // A bot that snapped resolves the choice: with a known high card it
+  // gives it away; without one it lets the victim draw.
+  const st5 = riggedGame([
+    [['10','♠'],['9','♥'],['2','♦'],['3','♣']],
+    [['9','♦'],['4','♥'],['5','♦'],['6','♣']],
+  ], { discardTop: ['9','♣'], turnIdx: 0, deck: [['7','♥'],['3','♠']] });
+  E.applyAction(st5, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  let ba = E.botChooseAction(st5, 'p0', () => 0.5);
+  check('bot gives a known high card after snapping', ba && ba.type === 'snapChoice' && ba.mode === 'give' && ba.slot === 0);
+  const st6 = riggedGame([
+    [['2','♠'],['3','♥'],['4','♦'],['5','♣']],
+    [['9','♦'],['4','♥'],['5','♦'],['6','♣']],
+  ], { discardTop: ['9','♣'], turnIdx: 0, deck: [['7','♥'],['3','♠']] });
+  E.applyAction(st6, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  ba = E.botChooseAction(st6, 'p0', () => 0.5);
+  check('bot lets the victim draw when it holds no high card', ba && ba.type === 'snapChoice' && ba.mode === 'draw');
+  // Leavers: the snapper leaving auto-draws the victim a replacement;
+  // the victim leaving clears the choice.
+  const st7 = riggedGame([
+    [['10','♠'],['9','♥'],['2','♦'],['3','♣']],
+    [['9','♦'],['4','♥'],['5','♦'],['6','♣']],
+    [['7','♠'],['8','♥'],['2','♦'],['3','♣']],
+  ], { discardTop: ['9','♣'], turnIdx: 0, deck: [['7','♥'],['3','♠']] });
+  E.applyAction(st7, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  E.removePlayer(st7, 'p0');
+  check('snapper leaving auto-draws the victim a replacement', !st7.pendingSnapChoice && st7.players.find(p => p.id === 'p1').cards.length === 4);
+  const st8 = riggedGame([
+    [['10','♠'],['9','♥'],['2','♦'],['3','♣']],
+    [['9','♦'],['4','♥'],['5','♦'],['6','♣']],
+    [['7','♠'],['8','♥'],['2','♦'],['3','♣']],
+  ], { discardTop: ['9','♣'], turnIdx: 0, deck: [['7','♥'],['3','♠']] });
+  E.applyAction(st8, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' });
+  E.removePlayer(st8, 'p1');
+  check('victim leaving clears the pending choice', !st8.pendingSnapChoice && st8.phase !== 'over');
+}
+
+console.log('Wellington tie rule (owner rule, Nov 22): the caller loses a tie:');
+{
+  // Caller alone at the lowest score wins as usual.
+  const stA = riggedGame([
+    [['A','♠'],['K','♥'],['2','♦'],['3','♣']],   // 4
+    [['10','♠'],['10','♥'],['10','♦'],['10','♣']], // 40
+    [['9','♠'],['9','♥'],['9','♦'],['9','♣']],   // 36
+  ], { turnIdx: 0 });
+  E.applyAction(stA, 'p0', { type: 'wellington' });
+  let guard = 0;
+  while (stA.phase !== 'over' && guard++ < 12) {
+    const cur = stA.players[stA.turnIdx];
+    if (stA.pendingEffect) { E.applyAction(stA, stA.pendingEffect.by, { type: 'effectSkip' }); continue; }
+    if (stA.phase === 'drawn') { E.applyAction(stA, cur.id, { type: 'discardDrawn' }); continue; }
+    E.applyAction(stA, cur.id, { type: 'draw' });
+  }
+  check('caller alone at lowest wins', stA.phase === 'over' && stA.winners.join(',') === 'p0');
+  // Two NON-callers tie for lowest while the caller is higher: they
+  // share the win (the caller-loses rule only covers ties WITH the caller).
+  const stB = riggedGame([
+    [['10','♠'],['10','♥'],['10','♦'],['10','♣']], // 40 (caller)
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],   // 17
+    [['A','♠'],['K','♥'],['8','♦'],['10','♣']],  // 17
+  ], { turnIdx: 0 });
+  E.applyAction(stB, 'p0', { type: 'wellington' });
+  guard = 0;
+  while (stB.phase !== 'over' && guard++ < 12) {
+    const cur = stB.players[stB.turnIdx];
+    if (stB.pendingEffect) { E.applyAction(stB, stB.pendingEffect.by, { type: 'effectSkip' }); continue; }
+    if (stB.phase === 'drawn') { E.applyAction(stB, cur.id, { type: 'discardDrawn' }); continue; }
+    E.applyAction(stB, cur.id, { type: 'draw' });
+  }
+  check('non-caller tie still shares the win', stB.phase === 'over' && stB.winners.length === 2 && stB.winners.indexOf('p1') >= 0 && stB.winners.indexOf('p2') >= 0);
+}
+
 console.log('Wellington:');
 {
   // P0 calls Wellington on their turn before drawing. P1 gets one last
@@ -575,7 +704,9 @@ console.log('0-card instant end & lowest-wins incl. ties:');
   const r = E.applyAction(st, 'p1', { type: 'snap', slot: 0 });
   check('snapping last card ends the game immediately', r.ok && r.gameOver && st.phase === 'over');
   check('0-card player scores 0 and wins', st.winners.join(',') === 'p1' && st.scores.find(s => s.playerId === 'p1').total === 0);
-  // Lowest wins; tie shares.
+  // Lowest wins; a tie shares — EXCEPT the Wellington caller (owner rule,
+  // Nov 22): p0 called Wellington and tied p1 at 17, so p0 LOSES the tie
+  // and p1 wins alone.
   const st2 = riggedGame([
     [['A','♠'],['K','♥'],['9','♦'],['9','♣']],   // 0-1+9+9 = 17
     [['A','♠'],['K','♥'],['8','♦'],['10','♣']],  // 0-1+8+10 = 17
@@ -593,7 +724,7 @@ console.log('0-card instant end & lowest-wins incl. ties:');
     E.applyAction(st2, cur.id, { type: 'draw' });
   }
   check('game ended after final round', st2.phase === 'over');
-  check('lowest total wins', st2.winners.length === 2 && st2.winners.indexOf('p0') >= 0 && st2.winners.indexOf('p1') >= 0, 'winners=' + (st2.winners || []).join(','));
+  check('Wellington caller loses a tie for lowest (p1 wins alone)', st2.winners.length === 1 && st2.winners[0] === 'p1', 'winners=' + (st2.winners || []).join(','));
   check('scores computed per player', st2.scores.find(s => s.playerId === 'p2').total === 40);
 }
 
@@ -711,6 +842,15 @@ console.log('Bot pace + UI render rules (UI script block):');
     check('a tap never snaps (movement threshold)', /Math\.hypot\(ev\.clientX-snapDrag\.startX/.test(uiSrc));
     check('trailing click after a drag is ignored', /lastDragEnd/.test(uiSrc) && /Date\.now\(\)-lastDragEnd<250/.test(uiSrc));
     check('snap banner tells players to drag', /hold and drag a matching card to the middle/.test(uiSrc));
+    // Snap choice UI (owner rule, Nov 22): the modal, the pick route, and
+    // no "tie" anywhere in the end screens.
+    check('snap choice modal exists with Give / Draw / Back buttons', /id="snapChoiceModal"/.test(html) && /id="btnSnapGive"/.test(html) && /id="btnSnapDraw"/.test(html) && /id="btnSnapBack"/.test(html));
+    check('snap choice modal opens from render when the choice is mine', /view\.pendingSnapChoice&&view\.pendingSnapChoice\.by===myId/.test(uiSrc) && /openSnapChoice\(\)/.test(uiSrc));
+    check('snap choice pick step routes my card clicks to the give', /pendingSnapChoice\.step==='pick'/.test(fnBody(uiSrc, 'onMyCard')) && /snapChoice.*mode:'give', slot/.test(fnBody(uiSrc, 'onMyCard')));
+    check('snap drag is blocked while a choice is pending', /pendingSnapChoice/.test(fnBody(uiSrc, 'snapDraggable')));
+    check('snap banner hides while a choice is pending', /!view\.pendingSnapChoice/.test(uiSrc));
+    check('game over never says Tie (caller loses a tie; others share the win)', !/Tie — shared win!/.test(uiSrc) && !/Tie! /.test(uiSrc) && /Shared win!/.test(uiSrc));
+    check('filteredView exposes the pending snap choice', /pendingSnapChoice: st\.pendingSnapChoice/.test(engineSrc));
     check('wrong-snap reveal lands on the target player\'s seat', /res\.targetPlayerId\|\|myId/.test(uiSrc) && /'Wrong snap!'/.test(uiSrc));
     check('snap window marks every player\'s cards pickable (not the caller\'s)', /snapWindowOpen/.test(uiSrc) && /snapWindowOpen\)&&!isCaller/.test(uiSrc));
     check('snap banner says any player\'s card can be snapped', /hold and drag a matching card to the middle \(yours or ANY player/.test(uiSrc));
