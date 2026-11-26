@@ -171,6 +171,54 @@ const evalIn = (dom, expr) => dom.window.eval(expr);
   click(guest, 'btnSnapDraw'); await sleep(300);
   check('choice draw: the victim draws a new card', evalIn(host, 'fullState.players[0].cards.length') === 4 && evalIn(host, 'fullState.pendingSnapChoice') === null && evalIn(guest, 'view.pendingSnapChoice') === null);
 
+  // Effect offer (owner rule, Nov 25): the guest discards a 7 — the
+  // effect is OFFERED, not fired at once. The guest sees the blinking
+  // "Use card effect? Yes/No" bar below the table, and their cards stay
+  // draggable for a snap while the offer stands. Answering No skips it.
+  evalIn(host, `(()=>{ fullState.deck[fullState.deck.length-1]={id:'9♠', rank:'9', suit:'♠'}; return true; })()`);
+  el(host, 'drawPile').click(); await sleep(300);
+  click(host, 'btnDiscardDrawn'); await sleep(300);
+  check('turn passes to the guest for the offer test', evalIn(guest, 'view.turnPlayerId') === 'p1');
+  evalIn(host, `(()=>{ fullState.deck[fullState.deck.length-1]={id:'7♠', rank:'7', suit:'♠'}; return true; })()`);
+  el(guest, 'drawPile').click(); await sleep(300);
+  click(guest, 'btnDiscardDrawn'); await sleep(300);
+  check('guest discarding a 7 offers the effect (not fired at once)', evalIn(host, 'fullState.pendingEffect&&fullState.pendingEffect.offered') === true && evalIn(host, 'fullState.pendingEffect&&fullState.pendingEffect.by') === 'p1' && evalIn(host, 'fullState.phase') === 'effect');
+  check('guest sees the blinking offer bar below the table', visible(guest, 'effectOffer') && /Use card effect\?/.test(el(guest, 'effectOfferText').textContent));
+  // Rig a matching 7 into the guest's hand: it must stay draggable for a
+  // snap while the offer stands (the tester's bug: the effect used to
+  // block snapping the moment it fired).
+  evalIn(host, `(()=>{ fullState.players[1].cards[0]={id:'7♥', rank:'7', suit:'♥'}; broadcastViews(); return true; })()`);
+  await sleep(200);
+  check('guest card stays draggable for a snap while the offer stands', el(guest, 'myCards').children[0].classList.contains('snapdrag'));
+  click(guest, 'btnEffectNo'); await sleep(300);
+  check('guest answering No skips the effect, turn passes to the host', evalIn(host, 'fullState.pendingEffect') === null && evalIn(host, 'fullState.turnIdx') === 0 && evalIn(guest, 'view.turnPlayerId') === 'p0');
+
+  // Answering Yes activates the effect: the pick prompt appears, the
+  // offer bar goes away, and Skip still resolves it.
+  evalIn(host, `(()=>{ fullState.deck[fullState.deck.length-1]={id:'9♠', rank:'9', suit:'♠'}; return true; })()`);
+  el(host, 'drawPile').click(); await sleep(300);
+  click(host, 'btnDiscardDrawn'); await sleep(300);
+  evalIn(host, `(()=>{ fullState.deck[fullState.deck.length-1]={id:'7♠', rank:'7', suit:'♠'}; return true; })()`);
+  el(guest, 'drawPile').click(); await sleep(300);
+  click(guest, 'btnDiscardDrawn'); await sleep(300);
+  click(guest, 'btnEffectYes'); await sleep(300);
+  check('guest answering Yes activates the effect (offered=false)', evalIn(host, 'fullState.pendingEffect&&fullState.pendingEffect.offered') === false && evalIn(guest, 'view.pendingEffect&&view.pendingEffect.offered') === false);
+  check('offer bar hides after Yes, pick prompt shows', !visible(guest, 'effectOffer') && /blind swap/.test(el(guest, 'effectPrompt').textContent));
+  click(guest, 'btnEffectSkip'); await sleep(300);
+  check('skipping the active effect passes the turn to the host', evalIn(host, 'fullState.turnIdx') === 0);
+
+  // End Turn (owner rule, Nov 25): the host ends their turn early; the
+  // button shows the 30-second countdown in its label.
+  check('host sees the End Turn button with a countdown', visible(host, 'btnEndTurn') && /End Turn \(\d+s\)/.test(el(host, 'btnEndTurn').textContent));
+  click(host, 'btnEndTurn'); await sleep(300);
+  check('host End Turn passes the turn to the guest', evalIn(host, 'fullState.turnIdx') === 1 && evalIn(guest, 'view.turnPlayerId') === 'p1');
+
+  // 30-second turn timer: rig the deadline into the past — the host's
+  // 1-second tick ends the guest's turn on its own.
+  evalIn(host, `(()=>{ fullState.turnDeadline=Date.now()-1000; return true; })()`);
+  await sleep(1500);
+  check('turn timer auto-ends the turn when the clock runs out', evalIn(host, 'fullState.turnIdx') === 0 && evalIn(guest, 'view.turnPlayerId') === 'p0');
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

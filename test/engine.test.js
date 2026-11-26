@@ -145,22 +145,30 @@ console.log('Card effects on a NORMAL turn discard (exactly one effect):');
   }
   let t = discardDrawnRank('5');
   check('discarding a drawn 5 triggers peekOwn, turn does NOT pass yet', t.d.ok && t.d.effect === 'peekOwn' && t.st.phase === 'effect' && t.st.turnIdx === 0);
-  check('other actions blocked while effect pending', !E.applyAction(t.st, 'p0', { type: 'draw' }).ok);
+  check('5 is OFFERED first, not fired at once (owner rule, Nov 25)', t.st.pendingEffect.offered === true);
+  check('other actions blocked while the offer stands', !E.applyAction(t.st, 'p0', { type: 'draw' }).ok);
+  check('5 picks are rejected while the offer stands', !E.applyAction(t.st, 'p0', { type: 'effectPeekOwn', slot: 2 }).ok);
+  check('legalActions while offered: Yes/No only (no picks)', (() => { const a = E.legalActions(t.st, 'p0'); return a.some(x => x.type === 'effectAccept') && a.some(x => x.type === 'effectSkip') && !a.some(x => x.type === 'effectPeekOwn'); })());
+  check('accepting the offer (Yes) activates the 5', E.applyAction(t.st, 'p0', { type: 'effectAccept' }).ok && t.st.pendingEffect.offered === false);
+  check('accepting an already-active effect is rejected', !E.applyAction(t.st, 'p0', { type: 'effectAccept' }).ok);
   let r = E.applyAction(t.st, 'p0', { type: 'effectPeekOwn', slot: 2 });
   check('5 resolves by peeking own card, reveals it', r.ok && r.revealed && r.revealed.rank === '9');
   check('turn passes after 5 resolves', t.st.turnIdx === 1 && t.st.phase === 'play');
   // 6 -> peekOther
   t = discardDrawnRank('6');
   check('discarding a drawn 6 triggers peekOther', t.d.effect === 'peekOther' && t.st.phase === 'effect');
+  E.applyAction(t.st, 'p0', { type: 'effectAccept' });
   r = E.applyAction(t.st, 'p0', { type: 'effectPeekOther', targetPlayerId: 'p1', slot: 0 });
   check('6 resolves by peeking opponent card', r.ok && r.revealed && r.revealed.rank === '2');
   check('turn passes after 6 resolves', t.st.turnIdx === 1);
   // 6 cannot target yourself
   t = discardDrawnRank('6');
+  E.applyAction(t.st, 'p0', { type: 'effectAccept' });
   check('6 cannot target yourself', !E.applyAction(t.st, 'p0', { type: 'effectPeekOther', targetPlayerId: 'p0', slot: 0 }).ok);
   // 7 -> blind swap (two steps), neither card revealed
   t = discardDrawnRank('7');
   check('discarding a drawn 7 triggers swapBlind', t.d.effect === 'swapBlind');
+  E.applyAction(t.st, 'p0', { type: 'effectAccept' });
   r = E.applyAction(t.st, 'p0', { type: 'effectSwapOwn', slot: 0 });
   check('7 step 1 (own card) ok, blind — nothing revealed', r.ok && !r.revealed);
   r = E.applyAction(t.st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 0 });
@@ -169,6 +177,7 @@ console.log('Card effects on a NORMAL turn discard (exactly one effect):');
   // 8 -> seen swap: look at both, THEN choose Swap or Keep (Nov 21 rule).
   t = discardDrawnRank('8');
   check('discarding a drawn 8 triggers swapSeen', t.d.effect === 'swapSeen');
+  E.applyAction(t.st, 'p0', { type: 'effectAccept' });
   r = E.applyAction(t.st, 'p0', { type: 'effectSwapOwn', slot: 1 });
   check('8 step 1 (own card) reveals NOTHING yet — pick is final', r.ok && r.ownPicked && !r.revealed && !r.revealedOwn);
   check('8 step 1 does not change any card', t.st.players[0].cards[1].rank === 'K' && t.st.players[1].cards[3].rank === '6');
@@ -181,6 +190,7 @@ console.log('Card effects on a NORMAL turn discard (exactly one effect):');
   check('turn passes after 8 confirm', t.st.turnIdx === 1 && t.st.phase === 'play');
   // Decline path: same setup, player looks and keeps both cards.
   t = discardDrawnRank('8');
+  E.applyAction(t.st, 'p0', { type: 'effectAccept' });
   E.applyAction(t.st, 'p0', { type: 'effectSwapOwn', slot: 1 });
   r = E.applyAction(t.st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 3 });
   if (!r.awaitingDecision) throw new Error('decline setup: expected awaitingDecision');
@@ -189,8 +199,14 @@ console.log('Card effects on a NORMAL turn discard (exactly one effect):');
   check('turn passes after 8 decline (the look still counted as the effect)', t.st.turnIdx === 1 && t.st.phase === 'play');
   // Confirm/decline without looking first are rejected.
   t = discardDrawnRank('8');
+  E.applyAction(t.st, 'p0', { type: 'effectAccept' });
   check('8 confirm before picking both cards rejected', !E.applyAction(t.st, 'p0', { type: 'effectSwapConfirm' }).ok);
   check('8 decline before picking both cards rejected', !E.applyAction(t.st, 'p0', { type: 'effectSwapDecline' }).ok);
+  // Skipping from the OFFER (No) skips the effect without ever firing it.
+  t = discardDrawnRank('7');
+  check('7 offer can be declined (No) before anything happens', t.st.pendingEffect.offered === true);
+  r = E.applyAction(t.st, 'p0', { type: 'effectSkip' });
+  check('declining the offer skips the effect, turn passes', r.ok && r.skipped && t.st.turnIdx === 1 && !t.st.pendingEffect);
   // Swapped-OUT table card also triggers its effect (it is the card placed in the middle).
   const st2 = riggedGame([
     [['5','♠'],['K','♥'],['9','♦'],['9','♣']],
@@ -199,6 +215,8 @@ console.log('Card effects on a NORMAL turn discard (exactly one effect):');
   E.applyAction(st2, 'p0', { type: 'draw' });
   const sw = E.applyAction(st2, 'p0', { type: 'swap', slot: 0 });
   check('swapping out a 5 triggers peekOwn (swapped-out card is the discard)', sw.ok && sw.effect === 'peekOwn' && st2.phase === 'effect');
+  check('swapped-out 5 is offered first too', st2.pendingEffect.offered === true);
+  E.applyAction(st2, 'p0', { type: 'effectAccept' });
   E.applyAction(st2, 'p0', { type: 'effectPeekOwn', slot: 1 });
   check('turn passes after swapped-out 5 effect resolves', st2.turnIdx === 1);
   // Non-effect rank triggers nothing.
@@ -208,6 +226,91 @@ console.log('Card effects on a NORMAL turn discard (exactly one effect):');
   t = discardDrawnRank('5');
   r = E.applyAction(t.st, 'p0', { type: 'effectSkip' });
   check('effect may be skipped', r.ok && r.skipped && t.st.turnIdx === 1);
+}
+
+console.log('End Turn + bot answers to the effect offer (owner rule, Nov 25):');
+{
+  function twoPlayer() {
+    return riggedGame([
+      [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+      [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+    ], { deck: [['5','♣'],['3','♦'],['10','♠'],['9','♥']] }); // draws pop from the END: 9 first
+  }
+  // End Turn before drawing: draws + discards the drawn card, turn passes.
+  let st = twoPlayer();
+  let r = E.applyAction(st, 'p0', { type: 'endTurn' });
+  check('endTurn before drawing draws + discards, turn passes', r.ok && r.ended && st.turnIdx === 1 && st.phase === 'play');
+  check('endTurn before drawing did not touch my hand', st.players[0].cards.length === 4);
+  // End Turn after drawing: discards the drawn card, turn passes.
+  st = twoPlayer();
+  E.applyAction(st, 'p0', { type: 'draw' });
+  r = E.applyAction(st, 'p0', { type: 'endTurn' });
+  check('endTurn after drawing discards the drawn card, turn passes', r.ok && st.turnIdx === 1 && st.phase === 'play');
+  // End Turn with an OFFERED effect: skips it, turn passes.
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['7','♥'],['7','♠']] });
+  E.applyAction(st, 'p0', { type: 'draw' });
+  E.applyAction(st, 'p0', { type: 'discardDrawn' }); // 7 -> offered
+  check('setup: 7 is offered', st.pendingEffect && st.pendingEffect.offered === true);
+  r = E.applyAction(st, 'p0', { type: 'endTurn' });
+  check('endTurn with an offered effect skips it, turn passes', r.ok && !st.pendingEffect && st.turnIdx === 1);
+  // End Turn with an ACTIVE effect: skips it too.
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['7','♥'],['7','♠']] });
+  E.applyAction(st, 'p0', { type: 'draw' });
+  E.applyAction(st, 'p0', { type: 'discardDrawn' });
+  E.applyAction(st, 'p0', { type: 'effectAccept' });
+  r = E.applyAction(st, 'p0', { type: 'endTurn' });
+  check('endTurn with an active effect skips it, turn passes', r.ok && !st.pendingEffect && st.turnIdx === 1);
+  // End Turn is not mine to call.
+  st = twoPlayer();
+  check('endTurn on someone else\'s turn is rejected', !E.applyAction(st, 'p1', { type: 'endTurn' }).ok);
+  check('legalActions offers endTurn to the turn player', E.legalActions(twoPlayer(), 'p0').some(a => a.type === 'endTurn'));
+  // End Turn while I have a pending snap choice: the victim draws, the
+  // effect is skipped, the turn passes. (P0 discards a 7 — offered, turn
+  // not passed yet — then snaps P1's matching 7, then ends the turn.)
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+    [['7','♦'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['7','♥'],['7','♠']] });
+  E.applyAction(st, 'p0', { type: 'draw' });
+  E.applyAction(st, 'p0', { type: 'discardDrawn' }); // 7♠ -> offered, top is 7
+  r = E.applyAction(st, 'p0', { type: 'snap', targetPlayerId: 'p1', slot: 0 }); // P1's 7♦
+  check('setup: cross-player snap opens a choice for P0', r.ok && r.correct && st.pendingSnapChoice && st.pendingSnapChoice.by === 'p0' && st.players[1].cards.length === 3);
+  r = E.applyAction(st, 'p0', { type: 'endTurn' });
+  check('endTurn resolves my snap choice as a draw (victim back to 4)', r.ok && !st.pendingSnapChoice && st.players[1].cards.length === 4);
+  check('endTurn also skips the offered effect and passes the turn', !st.pendingEffect && st.turnIdx === 1);
+  // Bot answers to the offer: 5/6/8 accept (free information); the 7
+  // accepts only with a KNOWN bad card (7+) worth offloading.
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['7','♥'],['5','♠']] });
+  st.players[1].isBot = true; st.turnIdx = 1;
+  E.applyAction(st, 'p1', { type: 'draw' });
+  E.applyAction(st, 'p1', { type: 'discardDrawn' }); // 5 -> offered to the bot
+  check('bot with an offered 5 accepts (free information)', E.botChooseAction(st, 'p1').type === 'effectAccept');
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+    [['Q','♥'],['K','♦'],['9','♦'],['9','♣']],
+  ], { deck: [['7','♥'],['7','♠']] });
+  st.players[1].isBot = true; st.turnIdx = 1;
+  E.applyAction(st, 'p1', { type: 'draw' });
+  E.applyAction(st, 'p1', { type: 'discardDrawn' }); // 7 -> offered; bot knows Q (11)
+  check('bot with an offered 7 and a known Q accepts', E.botChooseAction(st, 'p1').type === 'effectAccept');
+  st = riggedGame([
+    [['A','♠'],['K','♥'],['9','♦'],['9','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['5','♣']],
+  ], { deck: [['7','♥'],['7','♠']] });
+  st.players[1].isBot = true; st.turnIdx = 1;
+  st.players[1].cards.forEach((c, i) => setKnown(st, 1, i)); // bot knows all: 2,3,4,5
+  E.applyAction(st, 'p1', { type: 'draw' });
+  E.applyAction(st, 'p1', { type: 'discardDrawn' }); // 7 -> offered; best known is 5
+  check('bot with an offered 7 and no known card worth 7+ skips it', E.botChooseAction(st, 'p1').type === 'effectSkip');
 }
 
 console.log('Card 8 REGRESSION — the 8 can never look at two of the player\'s OWN cards:');
@@ -221,6 +324,8 @@ console.log('Card 8 REGRESSION — the 8 can never look at two of the player\'s 
     E.applyAction(st, 'p0', { type: 'draw' });
     E.applyAction(st, 'p0', { type: 'discardDrawn' });
     if (st.pendingEffect.kind !== 'swapSeen') throw new Error('setup: expected swapSeen, got ' + st.pendingEffect.kind);
+    if (!st.pendingEffect.offered) throw new Error('setup: expected the 8 to be offered first');
+    E.applyAction(st, 'p0', { type: 'effectAccept' });
     return st;
   }
   let st = eightPending();
@@ -278,6 +383,7 @@ console.log('Card 8 REGRESSION — the 8 can never look at two of the player\'s 
   ], { deck: [['9','♥'],['7','♠']] });
   E.applyAction(st7, 'p0', { type: 'draw' });
   E.applyAction(st7, 'p0', { type: 'discardDrawn' });
+  E.applyAction(st7, 'p0', { type: 'effectAccept' });
   E.applyAction(st7, 'p0', { type: 'effectSwapOwn', slot: 0 });
   r = E.applyAction(st7, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p0', slot: 1 });
   check('7 opponent pick targeting yourself rejected', !r.ok && st7.players[0].cards[0].rank === 'A' && st7.players[0].cards[1].rank === 'K');
@@ -295,6 +401,7 @@ console.log('Log narration names slots, never hidden values:');
   ], { deck: [['9','♥'],['7','♠']] });
   E.applyAction(st, 'p0', { type: 'draw' });
   E.applyAction(st, 'p0', { type: 'discardDrawn' }); // 7 -> blind swap effect
+  E.applyAction(st, 'p0', { type: 'effectAccept' });
   E.applyAction(st, 'p0', { type: 'effectSwapOwn', slot: 0 });
   E.applyAction(st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 2 });
   const line = st.log[st.log.length - 1];
@@ -638,6 +745,7 @@ console.log('Wellington:');
   E.applyAction(st2, 'p2', { type: 'draw' });
   const d2 = E.applyAction(st2, 'p2', { type: 'discardDrawn' });
   check('P2 discarding a 7 triggers the effect even in the final round', d2.effect === 'swapBlind' && st2.phase === 'effect');
+  E.applyAction(st2, 'p2', { type: 'effectAccept' });
   E.applyAction(st2, 'p2', { type: 'effectSwapOwn', slot: 0 });
   r = E.applyAction(st2, 'p2', { type: 'effectSwapOther', targetPlayerId: 'p0', slot: 0 });
   check('7 CANNOT target the Wellington caller', !r.ok);
@@ -821,6 +929,18 @@ console.log('Bot pace + UI render rules (UI script block):');
     check('UI renders no seen marker at all (no dot)', !/\.seen\b/.test(uiSrc) && !/seen-dot/.test(html));
     check('UI script has a transient-reveal flip-back (auto-close + Put it back)', /revealTimer/.test(uiSrc) && /transientReveal/.test(uiSrc));
     check('UI script has the 8 Swap/Keep confirm modal', /swapConfirmModal/.test(uiSrc) && /effectSwapConfirm/.test(uiSrc));
+    // Effect offer (owner rule, Nov 25): a blinking bar BELOW the table,
+    // never a modal — "Use card effect? Yes/No" — and the snap window
+    // stays open while it stands (snapping is not blocked by an offer).
+    check('effect offer bar exists with Yes/No buttons', /id="effectOffer"/.test(html) && /id="btnEffectYes"/.test(html) && /id="btnEffectNo"/.test(html) && /Use card effect\?/.test(uiSrc));
+    check('offer bar blinks (offerblink keyframes) and is not a modal', /@keyframes offerblink/.test(html) && /class="effect-offer/.test(html) && !/effectOffer.*modal/.test(html));
+    check('snap drag is NOT blocked by an offered effect', /peff\.by===myId&&!peff\.offered/.test(uiSrc));
+    check('effect picks are NOT routed while the offer stands', /pendingEffect\.by===myId&&!.*\.offered/.test(uiSrc));
+    // End Turn + 30-second turn timer (owner rule, Nov 25).
+    check('End Turn button exists and submits endTurn', /id="btnEndTurn"/.test(html) && /btnEndTurn.*type:'endTurn'/.test(uiSrc));
+    check('turn timer is 30 seconds with a 1-second tick', /TURN_SECONDS=30/.test(uiSrc) && /setInterval\(turnTimerTick, 1000\)/.test(uiSrc));
+    check('turn deadline rides in the view (engine)', (() => { const s2 = E.newGame(['A', 'B'], 3); s2.turnDeadline = 123456789; return E.filteredView(s2, 'p0').turnDeadline === 123456789; })());
+    check('turn timer auto-ends the turn on expiry (host only)', /turnTimerTick/.test(uiSrc) && /Date\.now\(\)<=fullState\.turnDeadline/.test(uiSrc) && /type:'endTurn'/.test(uiSrc));
     // Peek-phase turn indicator (live playtest Nov 21): nobody is "to move"
     // until everyone has finished peeking, and a draw-pile click while
     // peeking explains instead of silently doing nothing.

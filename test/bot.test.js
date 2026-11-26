@@ -236,8 +236,11 @@ function scheck(name, cond, extra) {
   st5.players[0].known['A♦'] = true; // bot has seen the opponent's Ace
   st5.deck = [{ id: '8♠', rank: '8', suit: '♠' }];
   E.applyAction(st5, 'p0', { type: 'draw' });
-  E.applyAction(st5, 'p0', { type: 'discardDrawn' }); // 8 -> swapSeen effect
+  E.applyAction(st5, 'p0', { type: 'discardDrawn' }); // 8 -> swapSeen effect (offered first)
   let b = E.botChooseAction(st5, 'p0');
+  scheck('bot 8 accepts the offered effect first (Yes)', b && b.type === 'effectAccept', 'got ' + JSON.stringify(b));
+  E.applyAction(st5, 'p0', b);
+  b = E.botChooseAction(st5, 'p0');
   scheck('bot 8 picks its highest own card first', b && b.type === 'effectSwapOwn' && (b.slot === 2 || b.slot === 3), 'got ' + JSON.stringify(b));
   const ownSlot8 = b.slot;
   E.applyAction(st5, 'p0', b);
@@ -270,7 +273,10 @@ function scheck(name, cond, extra) {
   st6.players[1].cards.forEach(c => { st6.players[0].known[c.id] = true; });
   st6.deck = [{ id: '8♠', rank: '8', suit: '♠' }];
   E.applyAction(st6, 'p0', { type: 'draw' });
-  E.applyAction(st6, 'p0', { type: 'discardDrawn' }); // 8 -> swapSeen effect
+  E.applyAction(st6, 'p0', { type: 'discardDrawn' }); // 8 -> swapSeen effect (offered first)
+  b = E.botChooseAction(st6, 'p0');
+  scheck('bot 8 (decline case) accepts the offered effect first (Yes)', b && b.type === 'effectAccept', 'got ' + JSON.stringify(b));
+  E.applyAction(st6, 'p0', b);
   b = E.botChooseAction(st6, 'p0');
   scheck('bot 8 (decline case) picks a highest own card (Ace, 0)', b && b.type === 'effectSwapOwn' && (b.slot === 0 || b.slot === 1), 'got ' + JSON.stringify(b));
   E.applyAction(st6, 'p0', b);
