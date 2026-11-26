@@ -167,9 +167,30 @@ const evalIn = (dom, expr) => dom.window.eval(expr);
   guest.window.document.dispatchEvent(PE('pointerup', 150, 150));
   await sleep(300);
   check('cross-player snap opens the choice for the snapper', evalIn(host, 'fullState.pendingSnapChoice&&fullState.pendingSnapChoice.by') === 'p1' && evalIn(host, 'fullState.pendingSnapChoice&&fullState.pendingSnapChoice.target') === 'p0' && evalIn(host, 'fullState.players[0].cards.length') === 3);
-  check('guest sees the snap choice pop-up', evalIn(guest, '!!view.pendingSnapChoice') === true && visible(guest, 'snapChoiceModal'));
+  check('guest sees the snap choice bar below the table (not a modal)', evalIn(guest, '!!view.pendingSnapChoice') === true && visible(guest, 'snapChoiceBar'));
   click(guest, 'btnSnapDraw'); await sleep(300);
   check('choice draw: the victim draws a new card', evalIn(host, 'fullState.players[0].cards.length') === 4 && evalIn(host, 'fullState.pendingSnapChoice') === null && evalIn(guest, 'view.pendingSnapChoice') === null);
+
+  // Snap-choice GIVE (owner report, Nov 25): the modal used to cover
+  // the table in the pick step, so the snapper could not tap one of
+  // their own cards to give. Now it is a bar below the table — the tap
+  // must reach the card.
+  const topRank3 = evalIn(host, `(()=>{ const top=fullState.discard[fullState.discard.length-1]; const suit=['♠','♥','♦','♣'].find(s=>s!==top.suit); fullState.players[0].cards[0]={id:top.rank+suit, rank:top.rank, suit}; broadcastViews(); return top.rank; })()`);
+  await sleep(200);
+  stubMiddle();
+  const oppCard2 = guest.window.document.querySelector('[data-pid="p0"][data-slot="0"]');
+  check('host card is draggable for a second cross-player snap', !!oppCard2 && oppCard2.classList.contains('snapdrag'));
+  oppCard2.dispatchEvent(PE('pointerdown', 50, 500));
+  guest.window.document.dispatchEvent(PE('pointermove', 150, 150));
+  guest.window.document.dispatchEvent(PE('pointerup', 150, 150));
+  await sleep(300);
+  check('second cross-player snap opens the choice again', evalIn(host, 'fullState.pendingSnapChoice&&fullState.pendingSnapChoice.by') === 'p1' && evalIn(host, 'fullState.players[0].cards.length') === 3);
+  check('guest sees the snap choice bar (no modal anywhere)', visible(guest, 'snapChoiceBar') && !visible(guest, 'snapChoiceModal'));
+  click(guest, 'btnSnapGive'); await sleep(300);
+  check('Give switches the bar to the pick step', evalIn(host, 'fullState.pendingSnapChoice&&fullState.pendingSnapChoice.step') === 'pick' && /Pick a card to give/.test(el(guest, 'snapChoiceText').textContent));
+  const guestCardsBefore = evalIn(host, 'fullState.players[1].cards.length');
+  el(guest, 'myCards').children[0].click(); await sleep(300);
+  check('guest taps a card to give it — the card moves to the victim', evalIn(host, 'fullState.pendingSnapChoice') === null && evalIn(host, 'fullState.players[1].cards.length') === guestCardsBefore - 1 && evalIn(host, 'fullState.players[0].cards.length') === 4 && !visible(guest, 'snapChoiceBar'));
 
   // Effect offer (owner rule, Nov 25): the guest discards a 7 — the
   // effect is OFFERED, not fired at once. The guest sees the blinking
@@ -207,17 +228,24 @@ const evalIn = (dom, expr) => dom.window.eval(expr);
   click(guest, 'btnEffectSkip'); await sleep(300);
   check('skipping the active effect passes the turn to the host', evalIn(host, 'fullState.turnIdx') === 0);
 
-  // End Turn (owner rule, Nov 25): the host ends their turn early; the
-  // button shows the 30-second countdown in its label.
+  // End Turn (owner rule, Nov 25): the host must draw first — the
+  // button is visible on their turn but greyed out until they have
+  // drawn a card. Once drawn, ending discards the drawn card and the
+  // turn passes to the guest.
   check('host sees the End Turn button with a countdown', visible(host, 'btnEndTurn') && /End Turn \(\d+s\)/.test(el(host, 'btnEndTurn').textContent));
+  check('End Turn is greyed out before drawing (must draw first)', el(host, 'btnEndTurn').disabled === true);
+  evalIn(host, `(()=>{ fullState.deck[fullState.deck.length-1]={id:'9♠', rank:'9', suit:'♠'}; return true; })()`);
+  el(host, 'drawPile').click(); await sleep(300);
+  check('End Turn is enabled once drawn', el(host, 'btnEndTurn').disabled === false);
   click(host, 'btnEndTurn'); await sleep(300);
-  check('host End Turn passes the turn to the guest', evalIn(host, 'fullState.turnIdx') === 1 && evalIn(guest, 'view.turnPlayerId') === 'p1');
+  check('host End Turn discards the drawn card, turn passes to the guest', evalIn(host, 'fullState.turnIdx') === 1 && evalIn(guest, 'view.turnPlayerId') === 'p1');
 
-  // 30-second turn timer: rig the deadline into the past — the host's
-  // 1-second tick ends the guest's turn on its own.
+  // 60-second turn timer: rig the deadline into the past — the host's
+  // 1-second tick force-ends the guest's turn on its own, even though
+  // the guest has not drawn yet.
   evalIn(host, `(()=>{ fullState.turnDeadline=Date.now()-1000; return true; })()`);
   await sleep(1500);
-  check('turn timer auto-ends the turn when the clock runs out', evalIn(host, 'fullState.turnIdx') === 0 && evalIn(guest, 'view.turnPlayerId') === 'p0');
+  check('turn timer force-ends the turn when the clock runs out', evalIn(host, 'fullState.turnIdx') === 0 && evalIn(guest, 'view.turnPlayerId') === 'p0');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

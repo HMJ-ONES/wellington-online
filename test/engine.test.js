@@ -236,11 +236,17 @@ console.log('End Turn + bot answers to the effect offer (owner rule, Nov 25):');
       [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
     ], { deck: [['5','♣'],['3','♦'],['10','♠'],['9','♥']] }); // draws pop from the END: 9 first
   }
-  // End Turn before drawing: draws + discards the drawn card, turn passes.
+  // OWNER RULE (Nov 25): ending the turn early is NOT allowed before
+  // drawing — you must buy a card and discard something first.
   let st = twoPlayer();
   let r = E.applyAction(st, 'p0', { type: 'endTurn' });
-  check('endTurn before drawing draws + discards, turn passes', r.ok && r.ended && st.turnIdx === 1 && st.phase === 'play');
-  check('endTurn before drawing did not touch my hand', st.players[0].cards.length === 4);
+  check('endTurn before drawing is rejected (must draw first)', !r.ok && /draw a card first/.test(r.error) && st.turnIdx === 0 && st.phase === 'play');
+  // ...unless the timer forces it (force:true): then it draws + discards
+  // for you and the turn passes.
+  st = twoPlayer();
+  r = E.applyAction(st, 'p0', { type: 'endTurn', force: true });
+  check('forced endTurn (timer) before drawing draws + discards, turn passes', r.ok && r.ended && st.turnIdx === 1 && st.phase === 'play');
+  check('forced endTurn did not touch my hand', st.players[0].cards.length === 4);
   // End Turn after drawing: discards the drawn card, turn passes.
   st = twoPlayer();
   E.applyAction(st, 'p0', { type: 'draw' });
@@ -269,7 +275,9 @@ console.log('End Turn + bot answers to the effect offer (owner rule, Nov 25):');
   // End Turn is not mine to call.
   st = twoPlayer();
   check('endTurn on someone else\'s turn is rejected', !E.applyAction(st, 'p1', { type: 'endTurn' }).ok);
-  check('legalActions offers endTurn to the turn player', E.legalActions(twoPlayer(), 'p0').some(a => a.type === 'endTurn'));
+  check('legalActions does NOT offer endTurn before drawing (must draw first)', !E.legalActions(twoPlayer(), 'p0').some(a => a.type === 'endTurn'));
+  st = twoPlayer(); E.applyAction(st, 'p0', { type: 'draw' });
+  check('legalActions offers endTurn once drawn', E.legalActions(st, 'p0').some(a => a.type === 'endTurn'));
   // End Turn while I have a pending snap choice: the victim draws, the
   // effect is skipped, the turn passes. (P0 discards a 7 — offered, turn
   // not passed yet — then snaps P1's matching 7, then ends the turn.)
@@ -311,6 +319,76 @@ console.log('End Turn + bot answers to the effect offer (owner rule, Nov 25):');
   E.applyAction(st, 'p1', { type: 'draw' });
   E.applyAction(st, 'p1', { type: 'discardDrawn' }); // 7 -> offered; best known is 5
   check('bot with an offered 7 and no known card worth 7+ skips it', E.botChooseAction(st, 'p1').type === 'effectSkip');
+}
+
+console.log('Bot knowledge (owner report, Nov 25): a bot must never snap a card it never saw in that hand:');
+{
+  // The tester's exact bug: the bot once held a K, discarded it, the
+  // discard was reshuffled and the human drew the K — the bot's stale
+  // `known` entry let it snap the K from the human. After the fix the
+  // card is forgotten the moment it re-enters the deck / is drawn.
+  let st = riggedGame([
+    [['A','♠'],['2','♥'],['9','♦'],['9','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [] });
+  st.players[0].known['K♥'] = true; // stale: the bot once held this K
+  st.discard = [card('K','♥'), card('K','♦')]; // K♥ will reshuffle, K♦ stays on top
+  st.snapWindow = { open: true, topRank: 'K' };
+  st.turnIdx = 1;
+  let r = E.applyAction(st, 'p1', { type: 'draw' }); // reshuffles, draws the K♥
+  check('reshuffled + drawn card is forgotten by the bot', r.ok && st.drawnCard && st.drawnCard.id === 'K♥' && !st.players[0].known['K♥']);
+  check('bot does NOT snap the reshuffled K from the human', E.botSnapChoice(st, 'p0', () => 0) === null);
+  // A card the bot knew (stale) is drawn by a human — forgotten for the bot.
+  st = riggedGame([
+    [['A','♠'],['2','♥'],['9','♦'],['9','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['K','♥']] });
+  st.players[0].known['K♥'] = true;
+  st.turnIdx = 1;
+  r = E.applyAction(st, 'p1', { type: 'draw' });
+  check('a stale-known card drawn by a human is forgotten by the bot', r.ok && !st.players[0].known['K♥']);
+  // A penalty card is face-down and unseen — forgotten by everyone,
+  // even a player who once knew that card.
+  st = riggedGame([
+    [['A','♠'],['2','♥'],['9','♦'],['9','♣']],
+    [['2','♠'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['K','♥']] });
+  st.players[0].known['K♥'] = true;
+  st.snapWindow = { open: true, topRank: 'Q' };
+  r = E.applyAction(st, 'p1', { type: 'snap', slot: 0 }); // 2♠ vs Q: wrong snap
+  check('wrong snap draws the penalty card', r.ok && !r.correct && st.players[1].cards.length === 5);
+  check('penalty card is forgotten by everyone', !st.players[0].known['K♥'] && !st.players[1].known['K♥']);
+  // 7 (blind swap): neither player sees the card they receive. The bot
+  // keeps knowing the card it gave (it picked a known one); the human
+  // never learns the card they get.
+  st = riggedGame([
+    [['A','♠'],['2','♥'],['9','♦'],['9','♣']],
+    [['K','♥'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['7','♥'],['7','♠']] });
+  st.turnIdx = 0;
+  E.applyAction(st, 'p0', { type: 'draw' });
+  E.applyAction(st, 'p0', { type: 'discardDrawn' }); // 7 -> offered
+  E.applyAction(st, 'p0', { type: 'effectAccept' });
+  E.applyAction(st, 'p0', { type: 'effectSwapOwn', slot: 0 }); // gives the known A♠
+  r = E.applyAction(st, 'p0', { type: 'effectSwapOther', targetPlayerId: 'p1', slot: 0 }); // receives the K♥ blind
+  check('7 swap executes', r.ok && r.swapped && st.players[0].cards[0].id === 'K♥' && st.players[1].cards[0].id === 'A♠');
+  check('7: the receiver never learns the card they get (blind)', !st.players[0].known['K♥'] && !st.players[1].known['A♠']);
+  check('7: the giver keeps knowing the card they gave away', st.players[0].known['A♠'] === true);
+  // Snap-choice give: the victim receives the card face-down and never
+  // learns it; the snapper keeps knowing what they gave.
+  st = riggedGame([
+    [['A','♠'],['2','♥'],['9','♦'],['9','♣']],
+    [['K','♥'],['3','♥'],['4','♦'],['6','♣']],
+  ], { deck: [['5','♣']] });
+  st.snapWindow = { open: true, topRank: 'K' };
+  st.turnIdx = 0;
+  r = E.applyAction(st, 'p0', { type: 'snap', slot: 0, targetPlayerId: 'p1' }); // snaps the human's K♥
+  check('setup: cross-player snap opens a choice', r.ok && r.correct && st.pendingSnapChoice && st.pendingSnapChoice.by === 'p0');
+  E.applyAction(st, 'p0', { type: 'snapChoice', mode: 'give' }); // -> pick step
+  r = E.applyAction(st, 'p0', { type: 'snapChoice', mode: 'give', slot: 0 }); // gives the known A♠
+  check('snap-choice give moves the card to the victim', r.ok && r.resolved === 'give' && st.players[1].cards.length === 4 && st.players[1].cards[3].id === 'A♠');
+  check('snap-choice give: the victim never learns the card they get', !st.players[1].known['A♠']);
+  check('snap-choice give: the snapper keeps knowing what they gave', st.players[0].known['A♠'] === true);
 }
 
 console.log('Card 8 REGRESSION — the 8 can never look at two of the player\'s OWN cards:');
@@ -936,9 +1014,9 @@ console.log('Bot pace + UI render rules (UI script block):');
     check('offer bar blinks (offerblink keyframes) and is not a modal', /@keyframes offerblink/.test(html) && /class="effect-offer/.test(html) && !/effectOffer.*modal/.test(html));
     check('snap drag is NOT blocked by an offered effect', /peff\.by===myId&&!peff\.offered/.test(uiSrc));
     check('effect picks are NOT routed while the offer stands', /pendingEffect\.by===myId&&!.*\.offered/.test(uiSrc));
-    // End Turn + 30-second turn timer (owner rule, Nov 25).
+    // End Turn + 60-second turn timer (owner rule, Nov 25).
     check('End Turn button exists and submits endTurn', /id="btnEndTurn"/.test(html) && /btnEndTurn.*type:'endTurn'/.test(uiSrc));
-    check('turn timer is 30 seconds with a 1-second tick', /TURN_SECONDS=30/.test(uiSrc) && /setInterval\(turnTimerTick, 1000\)/.test(uiSrc));
+    check('turn timer is 60 seconds with a 1-second tick', /TURN_SECONDS=60/.test(uiSrc) && /setInterval\(turnTimerTick, 1000\)/.test(uiSrc));
     check('turn deadline rides in the view (engine)', (() => { const s2 = E.newGame(['A', 'B'], 3); s2.turnDeadline = 123456789; return E.filteredView(s2, 'p0').turnDeadline === 123456789; })());
     check('turn timer auto-ends the turn on expiry (host only)', /turnTimerTick/.test(uiSrc) && /Date\.now\(\)<=fullState\.turnDeadline/.test(uiSrc) && /type:'endTurn'/.test(uiSrc));
     // Peek-phase turn indicator (live playtest Nov 21): nobody is "to move"
@@ -965,10 +1043,12 @@ console.log('Bot pace + UI render rules (UI script block):');
     check('a tap never snaps (movement threshold)', /Math\.hypot\(ev\.clientX-snapDrag\.startX/.test(uiSrc));
     check('trailing click after a drag is ignored', /lastDragEnd/.test(uiSrc) && /Date\.now\(\)-lastDragEnd<250/.test(uiSrc));
     check('snap banner tells players to drag', /hold and drag a matching card to the middle/.test(uiSrc));
-    // Snap choice UI (owner rule, Nov 22): the modal, the pick route, and
-    // no "tie" anywhere in the end screens.
-    check('snap choice modal exists with Give / Draw / Back buttons', /id="snapChoiceModal"/.test(html) && /id="btnSnapGive"/.test(html) && /id="btnSnapDraw"/.test(html) && /id="btnSnapBack"/.test(html));
-    check('snap choice modal opens from render when the choice is mine', /view\.pendingSnapChoice&&view\.pendingSnapChoice\.by===myId/.test(uiSrc) && /openSnapChoice\(\)/.test(uiSrc));
+    // Snap choice UI (owner rule, Nov 22; bar since Nov 25): it is a bar
+    // below the table — NEVER a modal — so the cards stay tappable in
+    // the pick step and the End Turn button stays visible.
+    check('snap choice bar exists with Give / Draw / Back buttons', /id="snapChoiceBar"/.test(html) && /id="btnSnapGive"/.test(html) && /id="btnSnapDraw"/.test(html) && /id="btnSnapBack"/.test(html));
+    check('snap choice is a bar, not a modal (no snapChoiceModal anywhere)', !/snapChoiceModal/.test(html) && !/snapChoiceModal/.test(uiSrc));
+    check('snap choice bar shows from render when the choice is mine', /const sch=view\.pendingSnapChoice/.test(uiSrc) && /sch\.by===myId/.test(uiSrc) && /show\('snapChoiceBar',true\)/.test(uiSrc));
     check('snap choice pick step routes my card clicks to the give', /pendingSnapChoice\.step==='pick'/.test(fnBody(uiSrc, 'onMyCard')) && /snapChoice.*mode:'give', slot/.test(fnBody(uiSrc, 'onMyCard')));
     check('snap drag is blocked while a choice is pending', /pendingSnapChoice/.test(fnBody(uiSrc, 'snapDraggable')));
     check('snap banner hides while a choice is pending', /!view\.pendingSnapChoice/.test(uiSrc));

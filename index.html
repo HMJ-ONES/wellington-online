@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Wellington Online v2.0 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
+<!-- Wellington Online v2.1 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -198,7 +198,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
       <li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down, with no mark of any kind. A card you have seen looks exactly like one you haven't — remember on your own.</li>
       <li><b>Your turn:</b> draw the top card and look at it. Either <b>swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b> face-up. Exactly one discard per turn.</li>
       <li><b>Card effects</b> trigger ONLY on a normal turn discard (the drawn card you discard, or the table card you swap out): <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player's, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at both cards, then <b>choose</b> whether to swap them. Exactly one effect per turn discard. The effect is <b>offered first, never fired at once</b> — a blinking bar below the table asks <b>"Use card effect? Yes / No"</b> while the snap window stays open. <b>Snapped cards never trigger effects</b> — not even a snapped 5, 6, 7 or 8.</li>
-      <li><b>Turn timer:</b> every turn lasts at most <b>30 seconds</b> — the <b>⏱ End Turn</b> button shows the countdown. Tap it to end your turn early; when the clock runs out, the turn ends on its own.</li>
+      <li><b>Turn timer:</b> every turn lasts at most <b>60 seconds</b> — the <b>⏱ End Turn</b> button shows the countdown. You must <b>draw a card and discard something before ending your turn</b> (the button is greyed out until you have drawn); when the clock runs out, the turn ends on its own.</li>
       <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player's</b> — before the next card lands there. Hold and <b>drag</b> a matching card to the middle to snap (clicking never snaps, so a stray tap can't cost you a penalty card). If you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Snapping someone's <b>last</b> card ends the game at once — they win with 0. <b>Snapped someone else's card?</b> You choose: give them one of your cards, or let them draw a new one from the deck. The Wellington caller's cards are protected in the final round. Wrong rank? That card is shown, <b>goes back to its owner</b>, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on (so if you had 4 cards, you now have 5). <b>Advanced:</b> when setting up a room (or a bot game) you can turn <b>Snap tips</b> off — no banner at the top, just watch the middle yourself. Snapping still works exactly the same.</li>
       <li><b>WELLINGTON:</b> on your turn, before drawing, hit the big button when you think you're lowest. Everyone else gets exactly one last turn, then all cards are revealed. Only one call per game — and nobody may touch the caller's cards during the final round. <b>If the caller ties for the lowest score, the caller loses</b> — there is no draw with the caller.</li>
       <li><b>Deck runs out?</b> The discard pile (except its top card) is reshuffled into a new draw pile.</li>
@@ -246,6 +246,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
     <button id="btnWellington" type="button" class="wellington-btn" disabled>🏆 WELLINGTON</button>
   </div>
   <div id="effectOffer" class="effect-offer hidden"><span id="effectOfferText"></span><button id="btnEffectYes" type="button" class="offer-yes">Yes</button><button id="btnEffectNo" type="button">No</button></div>
+  <div id="snapChoiceBar" class="effect-offer hidden"><span id="snapChoiceText"></span><span class="row" style="gap:8px"><button id="btnSnapGive" type="button">🫴 Give one of my cards</button><button id="btnSnapDraw" type="button" class="ghost">🎴 Let them draw a new card</button><button id="btnSnapBack" type="button" class="ghost hidden">← Back to choices</button></span></div>
   <p id="effectPrompt" style="margin-top:10px;font-weight:700;min-height:20px"></p>
   <div class="row">
     <button id="btnPeekDone" type="button" class="ghost small hidden">✅ I'm Ready</button>
@@ -266,7 +267,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   </div>
 </div>
 
-<footer>Wellington Online v2.0 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
+<footer>Wellington Online v2.1 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
 Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, nothing to sign up for. The host holds the true game state; each player only ever sees their own cards.</footer>
 </div>
 
@@ -307,14 +308,6 @@ Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, n
   <p id="swapConfirmText" style="text-align:center;font-size:17px;margin:10px 0"></p>
   <div class="row" style="justify-content:center"><button id="btnSwapConfirm" type="button">🔀 Swap them</button><button id="btnSwapDecline" type="button" class="ghost">Keep as they are</button></div>
   <p style="font-size:13px;margin-top:12px">You already looked at both cards — that was your 8 effect either way. Swapping is your choice.</p>
-</div></div>
-
-<div id="snapChoiceModal" class="modal hidden"><div class="box">
-  <h2 id="snapChoiceTitle">You snapped their card!</h2>
-  <p id="snapChoiceText" style="text-align:center;font-size:17px;margin:10px 0"></p>
-  <div class="row" style="justify-content:center"><button id="btnSnapGive" type="button">🫴 Give one of my cards</button><button id="btnSnapDraw" type="button" class="ghost">🎴 Let them draw a new card</button></div>
-  <div class="row" style="justify-content:center"><button id="btnSnapBack" type="button" class="ghost hidden">← Back to choices</button></div>
-  <p id="snapChoiceHint" style="font-size:13px;margin-top:12px"></p>
 </div></div>
 
 <div id="revealModal" class="modal hidden"><div class="box">
@@ -406,8 +399,24 @@ function reshuffleDiscardIntoDeck(st){
   const rng=mulberry32((st.seed ^ (st.turnCount*2654435761) ^ st.discard.length)>>>0);
   st.deck=shuffle(st.discard.slice(),rng);
   st.discard=[top];
+  /* KNOWLEDGE RULE (Nov 25): a card that goes back into the deck is
+     forgotten by everyone — nobody knows who will draw it next. Without
+     this a bot "knew" a card it once held (or snapped, or saw discarded),
+     that card was reshuffled and dealt to someone else, and the bot
+     snapped it from them without ever seeing it in their hand. */
+  for(const c of st.deck) forgetCard(st, c.id, null);
   st.log.push('Draw pile ran out — discard pile reshuffled (top card stays).');
   return st.deck.length>0;
+}
+/* KNOWLEDGE RULE (Nov 25): a player's `known` map means "I have seen
+   this card's face IN ITS CURRENT PLACE". A card that moves to a hidden
+   place must be forgotten by everyone who cannot see it there — the
+   drawer sees a drawn card, a player who knowingly gives a card away
+   knows the receiver holds it, and everyone else forgets it. Call this
+   at every site a card enters a hand or the deck; the peek / 6 / 8
+   reveals set `known` for the player who actually looks. */
+function forgetCard(st, cardId, keepForId){
+  for(const p of st.players){ if(p.id!==keepForId) delete p.known[cardId]; }
 }
 function ensureDeck(st){ if(st.deck.length>0) return true; return reshuffleDiscardIntoDeck(st); }
 function unlockForPlayer(st, player){
@@ -450,6 +459,9 @@ function removePlayer(st, playerId){
   const wasTurnPlayer=idx===st.turnIdx;
   const returned=gone.cards.slice();
   if(st.phase==='drawn' && st.drawnBy===playerId && st.drawnCard){ returned.push(st.drawnCard); st.drawnCard=null; st.drawnBy=null; }
+  /* Cards back into the deck are forgotten by everyone — nobody knows
+     who will draw them next. */
+  for(const c of returned) forgetCard(st, c.id, null);
   st.deck=shuffle(st.deck.concat(returned), mulberry32(((st.seed||0)+0x9e3779b9+st.turnCount)>>>0));
   st.players.splice(idx,1);
   st.log.push(gone.name+' left the match — their cards went back into the draw pile.');
@@ -471,7 +483,7 @@ function removePlayer(st, playerId){
     const ch=st.pendingSnapChoice;
     if(ch.by===playerId){
       const tgt=playerById(st, ch.target);
-      if(tgt&&ensureDeck(st)){ const c=st.deck.pop(); tgt.cards.push(c); st.log.push(tgt.name+' drew a new card — the snapper left before choosing.'); }
+      if(tgt&&ensureDeck(st)){ const c=st.deck.pop(); forgetCard(st, c.id, null); tgt.cards.push(c); st.log.push(tgt.name+' drew a new card — the snapper left before choosing.'); }
       st.pendingSnapChoice=null;
     } else if(ch.target===playerId){
       st.pendingSnapChoice=null;
@@ -606,7 +618,7 @@ function applyAction(st, playerId, action){
       if(playerId!==currentPlayer(st).id) return {ok:false, error:'not your turn'};
       if(!ensureDeck(st)){ endGame(st,'Draw pile and discard pile are both exhausted.'); return {ok:true, gameOver:true}; }
       const c=st.deck.pop();
-      st.drawnCard=c; st.drawnBy=playerId; me.known[c.id]=true;
+      st.drawnCard=c; st.drawnBy=playerId; forgetCard(st, c.id, playerId); me.known[c.id]=true;
       st.phase='drawn';
       st.log.push(me.name+' drew a card.');
       return {ok:true, drawn:clone(c)};
@@ -744,6 +756,9 @@ function doSnap(st, me, action){
   if(ensureDeck(st)){
     penalty=st.deck.pop();
     penalty.locked=true; penalty.penaltyTurn=st.turnCount;
+    /* The penalty card is face-down and unseen — nobody knows it,
+       not even the player who drew it. */
+    forgetCard(st, penalty.id, null);
     me.cards.push(penalty);
   } else {
     st.log.push('No cards left in deck or discard — no penalty card could be drawn.');
@@ -774,6 +789,8 @@ function doSnapChoice(st, me, action){
   if(action.mode==='draw'){
     if(ensureDeck(st)){
       const c=st.deck.pop();
+      /* Face-down replacement — nobody knows it, not even the victim. */
+      forgetCard(st, c.id, null);
       target.cards.push(c);
       st.log.push(target.name+' drew a new card after '+me.name+' snapped theirs.');
     } else {
@@ -789,6 +806,9 @@ function doSnapChoice(st, me, action){
       const card=me.cards[slot];
       if(card.locked) return {ok:false, error:'a locked penalty card cannot be given away'};
       me.cards.splice(slot,1);
+      /* The card goes to the victim face-down — the victim never sees
+         it. The snapper keeps knowing it (they know what they gave). */
+      forgetCard(st, card.id, me.id);
       target.cards.push(card);
       st.log.push(me.name+' gave '+target.name+' one of their cards after the snap.');
       st.pendingSnapChoice=null;
@@ -821,18 +841,23 @@ function doEndTurn(st, me, action){
   const isTurn=currentPlayer(st).id===me.id;
   const ownsEffect=st.pendingEffect&&st.pendingEffect.by===me.id;
   if(!isTurn&&!ownsEffect) return {ok:false, error:'not your turn'};
+  /* OWNER RULE (Nov 25): ending the turn early is only allowed after
+     drawing — you must buy a card and discard something first. (The
+     1-minute timer force-ends the turn, drawing + discarding for you;
+     only the timer may pass force:true.) */
+  if(!action.force&&!ownsEffect&&st.phase!=='drawn') return {ok:false, error:'draw a card first — you must draw and discard something before ending your turn'};
   const turnBefore=st.turnCount;
   // 1. My snap choice resolves as 'draw'.
   if(st.pendingSnapChoice&&st.pendingSnapChoice.by===me.id){
     const tgt=playerById(st, st.pendingSnapChoice.target);
-    if(tgt&&ensureDeck(st)){ const c=st.deck.pop(); tgt.cards.push(c); st.log.push(tgt.name+' drew a new card after '+me.name+' ended the turn.'); }
+    if(tgt&&ensureDeck(st)){ const c=st.deck.pop(); forgetCard(st, c.id, null); tgt.cards.push(c); st.log.push(tgt.name+' drew a new card after '+me.name+' ended the turn.'); }
     st.pendingSnapChoice=null;
   }
   // 2. Not drawn yet: draw, then discard the drawn card.
   if(st.phase==='play'||st.phase==='final'){
     if(!ensureDeck(st)){ endGame(st,'Draw pile and discard pile are both exhausted.'); return {ok:true, gameOver:true, ended:true}; }
     const c=st.deck.pop();
-    st.drawnCard=c; st.drawnBy=me.id; me.known[c.id]=true;
+    st.drawnCard=c; st.drawnBy=me.id; forgetCard(st, c.id, me.id); me.known[c.id]=true;
     st.phase='drawn';
     st.log.push(me.name+' drew a card.');
   }
@@ -905,6 +930,10 @@ function doEffectStep(st, me, action){
     const slots={ownSlot:eff.ownSlot, targetPlayerId:eff.targetPlayerId, targetSlot:eff.targetSlot};
     if(type==='effectSwapConfirm'){
       me.cards[eff.ownSlot]=otherCard; target.cards[eff.targetSlot]=ownCard;
+      /* Both cards change hands face-down. The owner keeps knowing the
+         card they gave (they saw the pair); the target never sees the
+         card they get. The owner saw the card they received too. */
+      forgetCard(st, ownCard.id, me.id); forgetCard(st, otherCard.id, target.id); me.known[otherCard.id]=true;
       st.log.push(me.name+' used the 8 to swap their '+ordinal(eff.ownSlot+1)+' card with '+target.name+'\'s '+ordinal(eff.targetSlot+1)+' card after looking at both.');
       resolveEffectDone(st);
       return Object.assign({ok:true, swapped:true, revealed:pair}, slots);
@@ -983,6 +1012,10 @@ function doEffectStep(st, me, action){
         return {ok:true, awaitingDecision:true, revealed:{own:clone(ownCard), other:clone(otherCard)}, ownSlot:eff.ownSlot, targetPlayerId:target.id, targetSlot:slot};
       }
       me.cards[eff.ownSlot]=otherCard; target.cards[slot]=ownCard;
+      /* Blind swap: neither player sees the card they receive. The owner
+         keeps knowing the card they gave (they picked a known one); the
+         target keeps knowing the card they gave. Everyone else forgets. */
+      forgetCard(st, ownCard.id, me.id); forgetCard(st, otherCard.id, target.id);
       st.log.push(me.name+' used the 7 to swap their '+ordinal(eff.ownSlot+1)+' card with '+target.name+'\'s '+ordinal(slot+1)+' card (blind).');
       resolveEffectDone(st);
       return {ok:true, swapped:true, ownSlot:eff.ownSlot, targetPlayerId:target.id, targetSlot:slot};
@@ -1007,6 +1040,8 @@ function doEffectStep(st, me, action){
         return {ok:true, awaitingDecision:true, revealed:{own:clone(ownCard), other:clone(otherCard)}, ownSlot, targetPlayerId:target.id, targetSlot:slot};
       }
       me.cards[ownSlot]=otherCard; target.cards[slot]=ownCard;
+      /* Blind swap (atomic path): same knowledge rule as above. */
+      forgetCard(st, ownCard.id, me.id); forgetCard(st, otherCard.id, target.id);
       st.log.push(me.name+' used the 7 to swap their '+ordinal(ownSlot+1)+' card with '+target.name+'\'s '+ordinal(slot+1)+' card (blind).');
       resolveEffectDone(st);
       return {ok:true, swapped:true, ownSlot, targetPlayerId:target.id, targetSlot:slot};
@@ -1067,7 +1102,9 @@ function legalActions(st, playerId){
   if(!isTurn) return out;
   if(st.phase==='play'||st.phase==='final'){
     out.push({type:'draw'});
-    out.push({type:'endTurn'});
+    /* No endTurn here (owner rule, Nov 25): you must draw and discard
+       something before ending your turn. It is offered in 'drawn' and
+       for the pending effect's owner below. */
     if(st.phase==='play'&&!st.wellington.calledBy) out.push({type:'wellington'});
   } else if(st.phase==='drawn'){
     out.push({type:'discardDrawn'});
@@ -1495,7 +1532,7 @@ function rulesHtml(){
   '<li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down, with no mark of any kind. A card you have seen looks exactly like one you haven\'t — remember on your own.</li>'+
   '<li><b>Your turn:</b> draw the top card, look at it. <b>Swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b>. One discard per turn.</li>'+
   '<li><b>Effects — ONLY on a normal turn discard</b> (drawn card discarded, or swapped-out table card). Exactly one effect per turn discard: <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player\'s, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at BOTH cards, then <b>choose</b> whether to swap them (Swap / Keep as they are). The effect is offered first — a blinking bar below the table asks "Use card effect? Yes / No" — and the snap window stays open while you decide. The effect must resolve or be skipped before the turn passes.</li>'+
-  '<li><b>Turn timer:</b> every turn lasts at most <b>30 seconds</b> — the <b>⏱ End Turn</b> button shows the countdown. Tap it to end your turn early; when the clock runs out, the turn ends on its own.</li>'+
+  '<li><b>Turn timer:</b> every turn lasts at most <b>60 seconds</b> — the <b>⏱ End Turn</b> button shows the countdown. You must <b>draw a card and discard something before ending your turn</b> (the button is greyed out until you have drawn); when the clock runs out, the turn ends on its own.</li>'+
   '<li><b>Snaps NEVER trigger effects.</b> A snapped 5, 6, 7 or 8 is an effect-free discard — no peek, no swap.</li>'+
   '<li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player\'s</b> — before the next card lands there. Holding two of that rank? Snap <b>twice in a row</b> in the same window. Hold and <b>drag</b> a card (yours or anyone else\'s) to the middle to try — clicking never snaps. <b>Snapped someone else\'s card?</b> You choose: give them one of your cards, or let them draw a new one from the deck. Wrong rank? The card is shown, goes back to its owner, and you draw a <b>penalty card</b> (so 4 cards become 5). <b>Advanced:</b> the room setup can turn <b>Snap tips</b> off — no banner, just watch the middle yourself.</li>'+
   '<li><b>Wrong snap:</b> the card is shown, goes back to its slot, and you must take a <b>penalty card</b> (extra face-down card). You <b>cannot discard it right away</b> — not by snapping it, not by swapping it out, not by a 7/8 swap. From your <b>next turn on</b> it is a normal card: swap it out or snap it like any other.</li>'+
@@ -1563,14 +1600,14 @@ function afterAction(res, action){
 }
 function toast(msg){ $('effectPrompt').textContent=msg||''; }
 
-/* ---- turn timer (owner rule, Nov 25): 30 seconds max per turn. ----
+/* ---- turn timer (owner rule, Nov 25): 60 seconds max per turn. ----
    The host owns the deadline: when a turn starts it stamps
-   fullState.turnDeadline (now + 30s); the deadline rides in the view,
+   fullState.turnDeadline (now + 60s); the deadline rides in the view,
    so every client counts down the same clock. A 1-second tick updates
    the End Turn label and, on the host only, ends the turn when the
    clock runs out (draw + discard + skip effect, via endTurn). The
    interval only runs while a game is on screen (syncTurnTimer). */
-const TURN_SECONDS=30;
+const TURN_SECONDS=60;
 let turnTimerId=null, lastTurnKey='', lastTurnPhase='';
 function effectDesc(kind){
   if(kind==='peekOwn') return 'peek at one of your cards';
@@ -1591,7 +1628,7 @@ function maybeResetTurnDeadline(){
   // Host only: stamp a fresh deadline when a turn starts (turnIdx or
   // turnCount changes, or the game starts / a rematch begins). Snaps,
   // reveals and effect answers do not change the key, so the clock
-  // keeps running — 30 seconds per TURN, not per phase.
+  // keeps running — 60 seconds per TURN, not per phase.
   if(!fullState) return;
   if(playMode==='online'&&!isHost) return;
   const key=fullState.turnIdx+':'+fullState.turnCount;
@@ -1609,8 +1646,11 @@ function turnTimerTick(){
   if(!fullState.turnDeadline||Date.now()<=fullState.turnDeadline) return;
   if(fullState.phase!=='play'&&fullState.phase!=='final'&&fullState.phase!=='drawn'&&fullState.phase!=='effect') return;
   const actorId=fullState.pendingEffect?fullState.pendingEffect.by:fullState.players[fullState.turnIdx].id;
-  const r=applyAction(fullState, actorId, {type:'endTurn'});
-  if(r&&r.ok){ noteAction({type:'endTurn'}, r, actorId); broadcastOrRefresh(); scheduleBots(); }
+  /* The clock force-ends the turn even if the player never drew: it
+     draws + discards for them. A player tapping End Turn early may not
+     skip the draw (see doEndTurn) — only the timer may force it. */
+  const r=applyAction(fullState, actorId, {type:'endTurn', force:true});
+  if(r&&r.ok){ noteAction({type:'endTurn', force:true}, r, actorId); broadcastOrRefresh(); scheduleBots(); }
 }
 function syncTurnTimer(){
   const running=!$('gameScreen').classList.contains('hidden')&&view&&view.phase!=='over';
@@ -1662,36 +1702,14 @@ function closeSwapConfirm(){
   show('swapConfirmModal',false);
   render();
 }
-/* ---------- snap choice pop-up (owner rule, Nov 22) ----------
+/* ---------- snap choice bar (owner rule, Nov 22; non-modal since Nov 25)
    After I snap ANOTHER player's card, I must choose: give them one of
-   my cards, or let them draw a new one. The pop-up mirrors the 8's
-   Swap/Keep modal: it opens from render() whenever the choice is mine,
-   and its content follows the choice step ('choose' or 'pick'). */
-let snapChoiceModalOpen=false;
-function openSnapChoice(){
-  if(!view||!view.pendingSnapChoice) return;
-  const ch=view.pendingSnapChoice;
-  const tgt=(view.players.find(p=>p.id===ch.target)||{}).name||'them';
-  snapChoiceModalOpen=true;
-  if(ch.step==='pick'){
-    $('snapChoiceTitle').textContent='Pick a card to give';
-    $('snapChoiceText').textContent='Tap one of your cards below — it goes to '+tgt+' face-down.';
-    show('btnSnapGive',false); show('btnSnapBack',true);
-    $('btnSnapDraw').textContent='🎴 Let them draw instead';
-    $('snapChoiceHint').textContent='A high card hurts them; a low card helps them. A drawn card is random and face-down.';
-  } else {
-    $('snapChoiceTitle').textContent='You snapped '+tgt+'\'s card!';
-    $('snapChoiceText').textContent=tgt+' is one card short. Choose what happens next:';
-    show('btnSnapGive',true); show('btnSnapBack',false);
-    $('btnSnapDraw').textContent='🎴 Let them draw a new card';
-    $('snapChoiceHint').textContent='Give one of your cards, or let them draw a fresh one from the deck. The choice is yours — nobody can snap until you decide.';
-  }
-  show('snapChoiceModal',true);
-}
-function closeSnapChoice(){
-  snapChoiceModalOpen=false;
-  show('snapChoiceModal',false);
-}
+   my cards, or let them draw a new one. It used to be a full-screen
+   modal — but the modal stayed open in the 'pick' step and covered the
+   table, so the snapper could not tap one of their own cards to give
+   (and the End Turn button hid behind it too). Now it is a bar below
+   the table, like the effect offer: the table, the cards and the End
+   Turn button all stay reachable while the choice stands. */
 /* One place that turns an engine result into UI: reveals, the 8 choice,
    fizzle/skip cleanup. Used for local actions AND for guests (the host
    sends the result back with the fresh view). */
@@ -1722,12 +1740,24 @@ function render(){
   // If the 8 decision is pending for me and we know the pair, make sure
   // the Swap/Keep pop-up is open (e.g. after a re-render).
   if(view.pendingEffect&&view.pendingEffect.awaitingDecision&&view.pendingEffect.by===myId&&pendingEightPair&&!swapModalOpen) openSwapConfirm(pendingEightPair);
-  // Snap choice pop-up: open it whenever the choice is mine (its content
-  // follows the step), and close it the moment the choice is gone.
-  if(view.pendingSnapChoice&&view.phase!=='over'){
-    if(view.pendingSnapChoice.by===myId) openSnapChoice();
-    else if(snapChoiceModalOpen) closeSnapChoice();
-  } else if(snapChoiceModalOpen) closeSnapChoice();
+  // Snap choice bar: show it whenever the choice is mine (its content
+  // follows the step), and hide it the moment the choice is gone. It is
+  // a bar below the table — never a modal — so the cards stay tappable
+  // in the 'pick' step and the End Turn button stays visible.
+  const sch=view.pendingSnapChoice;
+  if(sch&&sch.by===myId&&view.phase!=='over'){
+    const tgt=(view.players.find(p=>p.id===sch.target)||{}).name||'them';
+    if(sch.step==='pick'){
+      $('snapChoiceText').textContent='Pick a card to give '+tgt+' — tap one of your cards below. A high card hurts them; a low card helps them.';
+      show('btnSnapGive',false); show('btnSnapBack',true);
+      $('btnSnapDraw').textContent='🎴 Let them draw instead';
+    } else {
+      $('snapChoiceText').textContent='You snapped '+tgt+'\'s card! '+tgt+' is one card short — give them one of yours, or let them draw a new one. Nobody can snap until you decide.';
+      show('btnSnapGive',true); show('btnSnapBack',false);
+      $('btnSnapDraw').textContent='🎴 Let them draw a new card';
+    }
+    show('snapChoiceBar',true);
+  } else show('snapChoiceBar',false);
   const me=view.players.find(p=>p.id===myId)||view.players[0];
   const turnP=view.players.find(p=>p.id===view.turnPlayerId);
   // Spectators watch only: no seat of their own, no actions, no snap
@@ -1902,10 +1932,16 @@ function render(){
     else if(eff.kind==='swapSeen') $('effectPrompt').textContent= eff.awaitingDecision ? 'Your 8: you looked at both cards — swap them or keep them? Use the pop-up.' : (eff.hasOwn ? 'Your 8: your card is picked ✓ — now click an OPPONENT\'s card. You\'ll see both, then choose Swap or Keep.' : 'Your 8: first click one of YOUR cards.');
   } else if(!eff) { /* keep toast text unless it is an effect prompt */ }
   // End Turn button (owner rule, Nov 25): my turn (play/final/drawn) or
-  // my effect pending. The label counts down the 30-second turn timer —
-  // the turn-timer tick updates it each second; here it is shown/hidden.
+  // my effect pending. It stays visible on my turn — like the WELLINGTON
+  // button, visible but greyed until it can be used — and is only
+  // ENABLED once I have drawn a card (phase 'drawn') or own an effect:
+  // you must buy a card and discard something before ending your turn.
+  // The label counts down the 60-second turn timer — the turn-timer tick
+  // updates it each second; here it is shown/hidden.
   const canEndTurn=!isSpec&&((isMyTurn&&(view.phase==='play'||view.phase==='final'||view.phase==='drawn'))||!!(eff&&eff.by===myId));
+  const endTurnReady=!isSpec&&((isMyTurn&&view.phase==='drawn')||!!(eff&&eff.by===myId));
   show('btnEndTurn', canEndTurn);
+  $('btnEndTurn').disabled=!endTurnReady;
   if(canEndTurn) updateEndTurnLabel();
   // Round table: place seats on the ellipse (no-op in stacked layout).
   positionRoundSeats();
