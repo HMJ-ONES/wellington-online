@@ -1,6 +1,6 @@
 # 🃏 Wellington Online
 
-**A free browser card game for 2–6 players. Lowest score wins.**
+**Version 2.1.1** — a free browser card game for 2–6 players. Lowest score wins.
 
 Play it right now — no sign-up, no download, no cost. PC and mobile.
 
