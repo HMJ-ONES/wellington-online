@@ -736,14 +736,15 @@ console.log('Filtered view never leaks hidden cards:');
   const view = E.filteredView(st, 'p0');
   const bobView = view.players[1];
   check('opponent cards are backs (rank null) when unseen', bobView.cards.every(c => c.rank === null && c.suit === null));
-  check('opponent cards carry no seen marker when unseen', bobView.cards.every(c => c.seen === false));
-  /* FACE-DOWN RULE (Nov 21): even cards the viewer HAS seen stay face-down
-     on the table — they only ever show their value while actively being
-     looked at (reveal modal) or at the final reveal. The view marks them
-     `seen` so the UI can show a small dot, without showing the value. */
+  check('opponent cards carry no seen field at all', bobView.cards.every(c => c.seen === undefined));
+  /* FACE-DOWN RULE (Nov 21, dot removed Nov 25): even cards the viewer
+     HAS seen stay face-down on the table — they only ever show their
+     value while actively being looked at (reveal modal) or at the final
+     reveal. And no marker of any kind is sent: a seen card looks exactly
+     like an unseen one, so players remember unaided. */
   check('own PEEKED cards stay FACE-DOWN on the table (rank null)', view.players[0].cards[0].rank === null && view.players[0].cards[1].rank === null);
-  check('own peeked cards carry a non-revealing seen marker', view.players[0].cards[0].seen === true && view.players[0].cards[1].seen === true);
-  check('own unpeeked cards are backs with no seen marker', view.players[0].cards[2].rank === null && view.players[0].cards[2].seen === false && view.players[0].cards[3].seen === false);
+  check('own peeked cards carry no seen marker either', view.players[0].cards[0].seen === undefined && view.players[0].cards[1].seen === undefined);
+  check('own unpeeked cards are backs with no seen marker', view.players[0].cards[2].rank === null && view.players[0].cards[2].seen === undefined && view.players[0].cards[3].seen === undefined);
   const json = JSON.stringify(view);
   // Bob's actual card ranks must not appear anywhere except as discard
   // ranks (discard is empty here) — check his unpeeked card ids are absent.
@@ -815,7 +816,9 @@ console.log('Bot pace + UI render rules (UI script block):');
     // the UI script must never read .known — values come only from rank
     // (final reveal / drawn card / transient reveal), never from memory.
     check('UI script never reads .known to render a value', !/\.known\b/.test(uiSrc));
-    check('UI script shows a seen marker from .seen', /\.seen\b/.test(uiSrc));
+    // No dot, no marker of any kind (owner rule, Nov 25): the UI never
+    // reads .seen and no seen-dot span exists anywhere in the page.
+    check('UI renders no seen marker at all (no dot)', !/\.seen\b/.test(uiSrc) && !/seen-dot/.test(html));
     check('UI script has a transient-reveal flip-back (auto-close + Put it back)', /revealTimer/.test(uiSrc) && /transientReveal/.test(uiSrc));
     check('UI script has the 8 Swap/Keep confirm modal', /swapConfirmModal/.test(uiSrc) && /effectSwapConfirm/.test(uiSrc));
     // Peek-phase turn indicator (live playtest Nov 21): nobody is "to move"
@@ -856,7 +859,7 @@ console.log('Bot pace + UI render rules (UI script block):');
     check('snap banner says any player\'s card can be snapped', /hold and drag a matching card to the middle \(yours or ANY player/.test(uiSrc));
     // Host broadcasts must build each guest's view for their SEAT id, not
     // the raw connection id — otherwise filteredView finds no player and
-    // every card renders unseen for guests (no gold dots on peeked cards).
+    // every card renders unseen for guests.
     check('broadcastViews builds guest views for the seat id', /function broadcastViews/.test(uiSrc) && /filteredView\(fullState, \(c\.gameId\|\|cid\)\)/.test(uiSrc));
     check('Snap banner has an ✕ that dismisses tips for this game only', /id="snapBannerX"/.test(html) && /snapTipsDismissed=true/.test(uiSrc) && /snapTipsDismissed=false/.test(uiSrc) && /!snapTipsDismissed/.test(uiSrc));
   }
@@ -948,10 +951,10 @@ console.log('removePlayer (disconnect withdrawal) + spectator views:');
   // still gets the discard pile and the log.
   st = riggedGame([[['5','♥'],['9','♣'],['2','♦'],['K','♠']],[['3','♥'],['8','♣'],['7','♦'],['Q','♠']]]);
   const spec = E.filteredView(st, 'not-a-player');
-  check('spectator view hides every card', spec.players.every(p => p.cards.every(c => c.rank === null && c.seen === false)));
+  check('spectator view hides every card', spec.players.every(p => p.cards.every(c => c.rank === null && c.seen === undefined)));
   check('spectator view still shows the discard and log', spec.discard.length >= 0 && Array.isArray(spec.log));
   const own = E.filteredView(st, 'p0');
-  check('a real player still sees their own peeked cards as seen (rank stays hidden in the view)', own.players[0].cards[0].seen === true && own.players[0].cards[0].rank === null && own.players[0].cards[2].seen === false);
+  check('a real player gets no seen marker either (rank stays hidden in the view)', own.players[0].cards[0].seen === undefined && own.players[0].cards[0].rank === null && own.players[0].cards[2].seen === undefined);
 
   // UI wiring (string checks on the page source).
   const uiSrc2 = blocks.find(s => s.includes('BOT_PACE'));

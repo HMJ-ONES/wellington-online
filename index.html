@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Wellington Online v1.8 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
+<!-- Wellington Online v1.9 — lowest score wins. 2-6 players, PeerJS P2P, $0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -63,8 +63,6 @@ table.points th{color:var(--gold)}
 .card-big .pts{font-size:11px;font-weight:700;color:#555}
 .card-big.back .pts{color:#fecaca}
 .card-big,.mini-card{position:relative}
-.seen-dot{position:absolute;top:4px;right:5px;width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 5px rgba(242,193,78,.95);z-index:2}
-.mini-card .seen-dot{width:7px;height:7px;top:2px;right:3px}
 .card-big.temp-flip{outline:4px solid var(--gold);transform:scale(1.07);box-shadow:0 0 18px rgba(242,193,78,.7)}
 .mini-card.temp-flip{outline:3px solid var(--gold)}
 .slot-glow-a{outline:4px solid var(--gold)!important;box-shadow:0 0 16px rgba(242,193,78,.85)}
@@ -189,7 +187,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
     <ul>
       <li><b>Goal: lowest score wins.</b> Numbered cards are worth <b>their face value</b> (2 is 2, 10 is 10), Jack &amp; Queen <b>11</b>, Joker <b>−2</b>, King <b>−1</b>, Ace <b>0</b>. (Points are editable — see Rules.)</li>
       <li><b>Start:</b> everyone gets 4 cards face-down. Peek at any <b>2 of your own</b> once, then tap <b>I'm Ready</b> — everyone peeks and readies at the same time.</li>
-      <li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down. A small gold dot marks cards you have seen.</li>
+      <li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down, with no mark of any kind. A card you have seen looks exactly like one you haven't — remember on your own.</li>
       <li><b>Your turn:</b> draw the top card and look at it. Either <b>swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b> face-up. Exactly one discard per turn.</li>
       <li><b>Card effects</b> trigger ONLY on a normal turn discard (the drawn card you discard, or the table card you swap out): <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player's, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at both cards, then <b>choose</b> whether to swap them. Exactly one effect per turn discard. <b>Snapped cards never trigger effects</b> — not even a snapped 5, 6, 7 or 8.</li>
       <li><b>Snap!</b> Whenever a card lands in the middle, anyone may discard a card of the <b>same rank</b> — from their own table <b>or any other player's</b> — before the next card lands there. Hold and <b>drag</b> a matching card to the middle to snap (clicking never snaps, so a stray tap can't cost you a penalty card). If you hold two of that rank, you may snap <b>twice in a row</b> in the same window. Snapping someone's <b>last</b> card ends the game at once — they win with 0. <b>Snapped someone else's card?</b> You choose: give them one of your cards, or let them draw a new one from the deck. The Wellington caller's cards are protected in the final round. Wrong rank? That card is shown, <b>goes back to its owner</b>, and you must take a <b>penalty card</b> you can't discard right away — it becomes a normal card from your next turn on (so if you had 4 cards, you now have 5). <b>Advanced:</b> when setting up a room (or a bot game) you can turn <b>Snap tips</b> off — no banner at the top, just watch the middle yourself. Snapping still works exactly the same.</li>
@@ -257,7 +255,7 @@ footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:26px;line-
   </div>
 </div>
 
-<footer>Wellington Online v1.8 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
+<footer>Wellington Online v1.9 — free, no accounts, no ads. Hosted on Cloudflare Pages. Code on GitHub.<br>
 Lobbies run peer-to-peer in your browser (WebRTC) — no game server, no cost, nothing to sign up for. The host holds the true game state; each player only ever sees their own cards.</footer>
 </div>
 
@@ -985,24 +983,25 @@ function legalActions(st, playerId){
    FACE-DOWN RULE (Nov 21): a card on a player's table is ALWAYS face-down
    while the game runs — even a card the viewer has already seen. `known`
    is memory only (bots, rules); it never makes a card show its value.
-   The viewer gets a non-revealing `seen` marker instead, so they can tell
-   which cards they have seen without seeing the value again. Values are
-   shown only at the final reveal (phase 'over'). A value a player is
-   ACTIVELY looking at travels outside this view: in the reveal modal
-   (peek / 5 / 6 / 8), or the drawn card in the hand area. The raw
+   NO seen marker is sent at all (owner rule, Nov 25): a viewed card
+   looks exactly like one never seen, so players remember unaided.
+   Values are shown only at the final reveal (phase 'over'). A value a
+   player is ACTIVELY looking at travels outside this view: in the reveal
+   modal (peek / 5 / 6 / 8), or the drawn card in the hand area. The raw
    `known` map is never sent. */
 function filteredView(st, viewerId){
-  const viewer=playerById(st,viewerId);
   const over=st.phase==='over';
   const players=st.players.map(p=>({
     id:p.id, name:p.name, isBot:p.isBot, seat:p.seat,
     cardCount:p.cards.length, peekedCount:p.peekedCount, peekDone:p.peekDone,
     cards:p.cards.map((c,ci)=>{
-      const seenByViewer = over || (viewer && viewer.known[c.id]);
       // NB: a card's true id IS its rank+suit (e.g. '9♦'), so an unseen
       // card must get an opaque id — sending the real id would leak it.
+      // NO seen marker is sent at all (owner rule, Nov 25): the client
+      // carries no record of which cards the viewer has seen, so nothing
+      // can render a memory aid — players remember unaided.
       return {id:over?c.id:('hidden-'+p.id+'-'+ci), rank:over?c.rank:null, suit:over?c.suit:null,
-        locked:!!c.locked, seen:!!seenByViewer};
+        locked:!!c.locked};
     })
   }));
   let drawn=null;
@@ -1353,15 +1352,15 @@ function cardPointsLabel(c){ if(!c||!c.rank) return ''; return (cardPoints(c)>0?
 function cardHtml(c, cls, extra, faceCard){
   /* FACE-DOWN RULE: a table card shows its value ONLY when it is actively
      being looked at (faceCard = transient reveal) or at the final reveal
-     (the view itself carries the rank then). Otherwise it is a back — with
-     a small gold dot if the viewer has seen it before (c.seen). */
+     (the view itself carries the rank then). Otherwise it is a back —
+     with NO marker of any kind: no dot, no tint, nothing that says the
+     viewer has seen this card before (owner rule, Nov 25 — players
+     remember unaided). */
   const shown = faceCard || (c && c.rank ? c : null);
   const known=!!shown;
   const red=known&&(shown.suit==='\u2665'||shown.suit==='\u2666');
   const locked=c&&c.locked;
-  const seen=c&&c.seen&&!known;
   return '<div class="card-big '+(known?'':'back ')+(red?'red ':'')+(locked?'locked ':'')+(faceCard?'temp-flip ':'')+(cls||'')+'" '+(extra||'')+'>'+
-    (seen?'<span class="seen-dot" title="You have seen this card"></span>':'')+
     (known?('<span>'+esc(shown.rank)+'</span><span class="suit">'+esc(shown.suit)+'</span><span class="pts">'+cardPointsLabel(shown)+' pts</span>')
           :'<span style="font-size:26px">🂠</span><span class="pts">'+(locked?'locked':'?')+'</span>')+'</div>';
 }
@@ -1369,8 +1368,7 @@ function miniCardHtml(c, faceCard){
   const shown = faceCard || (c && c.rank ? c : null);
   const known=!!shown;
   const red=known&&(shown.suit==='\u2665'||shown.suit==='\u2666');
-  const seen=c&&c.seen&&!known;
-  return '<div class="mini-card '+(known?'':'back ')+(red?'red':'')+(faceCard?' temp-flip':'')+'">'+(seen?'<span class="seen-dot" title="Seen"></span>':'')+(known?('<span>'+esc(shown.rank)+'</span><span>'+esc(shown.suit)+'</span>'):'?')+'</div>';
+  return '<div class="mini-card '+(known?'':'back ')+(red?'red':'')+(faceCard?' temp-flip':'')+'">'+(known?('<span>'+esc(shown.rank)+'</span><span>'+esc(shown.suit)+'</span>'):'?')+'</div>';
 }
 function viewHashOf(v){ let h=5381; const s=JSON.stringify([v.phase,v.turnIdx,v.turnCount,v.deckCount,v.discard.map(c=>c.id),v.players.map(p=>p.cards.map(c=>c.id)),v.wellington.calledBy]); for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h; }
 function pointsTableHtml(){
@@ -1382,7 +1380,7 @@ function rulesHtml(){
   return '<p><b>Goal:</b> finish with the <b>lowest</b> total. '+pointsTableHtml()+'</p>'+
   '<ul style="margin:8px 0 8px 18px">'+
   '<li><b>Start:</b> 4 cards face-down each. Peek at any <b>2 of your own</b> once, then tap <b>I\'m Ready</b> — everyone peeks and readies at the same time.</li>'+
-  '<li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down. A small gold dot marks cards you have seen.</li>'+
+  '<li><b>Cards on your table are always face-down.</b> You only ever see a card while you are actively looking at it (peek / 5 / 6 / 8 / the card you just drew) — then it goes back face-down, with no mark of any kind. A card you have seen looks exactly like one you haven\'t — remember on your own.</li>'+
   '<li><b>Your turn:</b> draw the top card, look at it. <b>Swap it blind</b> for one of your table cards (the old card goes face-up in the middle) or <b>discard the drawn card</b>. One discard per turn.</li>'+
   '<li><b>Effects — ONLY on a normal turn discard</b> (drawn card discarded, or swapped-out table card). Exactly one effect per turn discard: <b>5</b> peek 1 of your own, <b>6</b> peek 1 of another player\'s, <b>7</b> blind-swap 1 of yours with 1 of theirs, <b>8</b> look at BOTH cards, then <b>choose</b> whether to swap them (Swap / Keep as they are). The effect must resolve before the turn passes.</li>'+
   '<li><b>Snaps NEVER trigger effects.</b> A snapped 5, 6, 7 or 8 is an effect-free discard — no peek, no swap.</li>'+
@@ -1427,7 +1425,8 @@ function broadcastViews(){
     // NB: the view must be built for the guest's SEAT id (stored on the
     // connection at game start), not the raw connection id — with the
     // connection id, filteredView finds no player and every card renders
-    // unseen (no gold dots on cards the guest has peeked at).
+    // unseen (no marker at all on cards the guest has peeked at — the
+    // view carries no seen record).
     if(c&&c.open){ try{ const v=filteredView(fullState, (c.gameId||cid)); if(lastAnim) v.anim=lastAnim; c.send({t:'view', view:v, hash:stateFingerprint(fullState), yourId:(c.gameId||cid)}); }catch(e){} }
   }
 }

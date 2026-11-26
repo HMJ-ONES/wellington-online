@@ -8,7 +8,7 @@ Play it right now — no sign-up, no download, no cost. PC and mobile.
 
 Each player gets **4 cards face-down** in a row. Peek at 2 of your own, then take turns drawing and swapping — blind. Lowest total when the game ends wins.
 
-**Cards on your table are always face-down.** You only ever see a card while you are actively looking at it (a peek, a 5/6/8 look, or the drawn card in your hand) — then it flips back face-down. A small gold dot marks cards you have seen, so you can tell *which* ones you've seen without seeing their values. The only time table cards stay face-up is the final reveal.
+**Cards on your table are always face-down.** You only ever see a card while you are actively looking at it (a peek, a 5/6/8 look, or the drawn card in your hand) — then it flips back face-down, with no mark of any kind. A card you have seen looks exactly like one you haven't — remember on your own. The only time table cards stay face-up is the final reveal.
 
 ### Points
 
@@ -61,7 +61,7 @@ These are the calls made while building; they are also stated in the in-game Rul
 7. **Snap window:** the window is "open" whenever there is a top discard card, and it closes only in the sense that the *next* discard replaces the rank to match. A wrong snap does not close it.
 8. **Ties:** tied lowest totals share the win.
 9. **Bots and memory:** bots only act on cards they have *seen* (their peeks, drawn cards, 5/6/8 peeks, cards shown by a wrong snap). Unknown slots are estimated at ~5.5 (the deck average).
-10. **Face-down rule:** a table card is face-up only while it is actively being viewed (transient reveal, auto flip-back after ~4s) or at the final reveal. Memory of seen cards is kept for play, but the display never shows a value just because a card is known. A gold dot marks cards the viewer has seen.
+10. **Face-down rule:** a table card is face-up only while it is actively being viewed (transient reveal, auto flip-back after ~4s) or at the final reveal. Memory of seen cards is kept for play (bots and rules), but the display never shows a value just because a card is known — and no marker of any kind is shown either. A card the viewer has seen looks exactly like one they haven't.
 11. **Card 8 — look, then choose:** the 8 reveals both cards (transiently) and then shows a pop-up with both cards and the choice **Swap them** / **Keep as they are**. The pair is enforced at both layers: the engine rejects any 8 pair that is not one own + one opponent card (including locked/penalty and Wellington-caller targets), and the UI never offers own cards as the opponent pick. The same own+opponent rule applies to the blind 7.
 
 ## How to play
